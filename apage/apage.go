@@ -99,7 +99,7 @@ func init() {
 		h.Write(strings.Bytes(fmt.Sprintf("%v %v", t, n)));
 		p := hex.EncodeToString(h.Sum());
 		cache.paths[p] = data.(http.Handler);
-		receive <- &msg { "", "/apage?p=" + p };
+		receive <- &msg { "", "/apage/" + p };
 	};
 	server["serve-page"] = func(data interface{}) {
 		page, ok := cache.paths[data.(string)];
@@ -109,8 +109,9 @@ func init() {
 		receive <- &msg { "", page };
 	};
 	// connect all this to the http library
-	http.Handle("/apage", http.HandlerFunc(func (c *http.Conn, r *http.Request) {
-		send <- &msg { "serve-page", r.FormValue("p") };
+	http.Handle("/apage/", http.HandlerFunc(func (c *http.Conn, r *http.Request) {
+		ls := strings.Split(r.URL.Path, "/", 0);
+		send <- &msg { "serve-page", ls[len(ls)-1] };
 		m := <-receive;
 		h := m.d.(http.Handler);
 		h.ServeHTTP(c, r);
