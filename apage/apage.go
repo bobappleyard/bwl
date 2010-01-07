@@ -77,6 +77,7 @@ func init() {
 			}			
 		}
 	}();
+	
 	// init the cache
 	cache_limit := CACHE_DEFAULT;
 	cache := initCache();
@@ -84,6 +85,7 @@ func init() {
 	server["set-cache"] = func(data interface{}) {
 		cache_limit = data.(int);
 	};
+	
 	server["add-handler"] = func(data interface{}) {
 		// remove old item from the cache
 		if cache.items.Len() == cache_limit {
@@ -91,16 +93,17 @@ func init() {
 			cache.paths[e.Value.(*item).key] = nil, false;
 			cache.items.Remove(e);
 		}
-		// add new item to the cache
-		cache.items.PushFront(data);
 		// generate a key
 		h := md5.New();
 		t, n, _ := os.Time();
 		h.Write(strings.Bytes(fmt.Sprintf("%v %v", t, n)));
-		p := hex.EncodeToString(h.Sum());
-		cache.paths[p] = data.(http.Handler);
-		receive <- &msg { "", "/apage/" + p };
+		key := hex.EncodeToString(h.Sum());
+		// add new item
+		cache.items.PushFront(&item{ data.(http.Handler), key});
+		cache.paths[key] = data.(http.Handler);
+		receive <- &msg { "", "/apage/" + key };
 	};
+	
 	server["serve-page"] = func(data interface{}) {
 		page, ok := cache.paths[data.(string)];
 		if !ok {
@@ -108,6 +111,7 @@ func init() {
 		}
 		receive <- &msg { "", page };
 	};
+	
 	// connect all this to the http library
 	http.Handle("/apage/", http.HandlerFunc(func (c *http.Conn, r *http.Request) {
 		ls := strings.Split(r.URL.Path, "/", 0);
