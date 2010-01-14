@@ -6,7 +6,6 @@ import (
 	"io";
 	"rand";
 	"strconv";
-	"strings";
 )
 
 // API
@@ -77,8 +76,8 @@ func init() {
 	
 	// connect all this to the http library
 	http.Handle("/apage/", http.HandlerFunc(func (c *http.Conn, r *http.Request) {
-		ls := strings.Split(r.URL.Path, "/", 0);
-		id, err := strconv.Atoi64(ls[len(ls)-1]);
+		_, name := path.Split(r.URL.Path);
+		id, err := strconv.Atoi64(name);
 		if err != nil {
 			serveFail(c, r);
 		} else {
