@@ -6,6 +6,7 @@ import (
 	"io";
 	"rand";
 	"strconv";
+	"path";
 )
 
 // API
