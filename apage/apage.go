@@ -1,124 +1,90 @@
 package apage
 
 import (
-	http	"http";
-	list 	"container/list";
-	io		"io";
-	hex 	"encoding/hex";
-	md5 	"crypto/md5";
-	os		"os";
-	strings	"strings";
-	fmt 	"fmt";
+	"http";
+	"container/list";
+	"io";
+	"rand";
+	"strconv";
+	"strings";
 )
 
-// based on messaging
-type msg struct {
-	t string;
-	d interface{};
-}
-
-var send, receive chan *msg
-
 // API
+var setCache, addHandler func(value) value 
 
-// change the number of items that appear in the apage cache
-func SetCacheSize(s int) {
-	send <- &msg { "set-cache", s };
+// Changes the maximum number of items in the handler cache.
+func SetCacheSize(newSize int) {
+	setCache(newSize);
 }
 
-// create a new anonymous page
+// Attaches a handler to a page, and returns a link to it.
 func Handle(h http.Handler) string {
-	send <- &msg { "add-handler", h };
-	m := <-receive;
-	return m.d.(string);
+	return addHandler(h).(string);
 }
 
-// shortcut for function pages
+// A shortcut for function pages.
 func Create(h func(c *http.Conn, r *http.Request)) string {
 	return Handle(http.HandlerFunc(h));
 }
 
 // implementation
 
-type item struct {
-	a http.Handler;
-	key string;
-}
-
-type cache struct {
-	items *list.List;
-	paths map[string] http.Handler;
-}
-
-func initCache() *cache {
-	res := new(cache);
-	res.items = list.New();
-	res.paths = make(map[string] http.Handler);
-	return res;
-}
-
 const CACHE_DEFAULT = 1024
 
-func serveFail(c *http.Conn, r *http.Request) {
-	io.WriteString(c, "fallen out of cache");
-}
-
 func init() {
-	// messaging architecture
-	server := make(map[string] func(data interface{}));
-	send = make(chan *msg);
-	receive = make(chan *msg);
-	go func() {
-		for {
-			m := <-send;
-			f := server[m.t];
-			if f != nil {
-				f(m.d);
-			}			
-		}
-	}();
-	
 	// init the cache
 	cache_limit := CACHE_DEFAULT;
-	cache := initCache();
-	// message handlers
-	server["set-cache"] = func(data interface{}) {
+	items := list.New();
+	paths := make(map[int64] http.Handler);
+	// start the server
+	a := new(Actor);
+	// register some message handlers
+	setCache = a.CreateHandler(func (data value) {
 		cache_limit = data.(int);
-	};
-	
-	server["add-handler"] = func(data interface{}) {
-		// remove old item from the cache
-		if cache.items.Len() == cache_limit {
-			e := cache.items.Back();
-			cache.paths[e.Value.(*item).key] = nil, false;
-			cache.items.Remove(e);
+	});
+	addHandler = a.CreateHandler(func (data value) value {
+		// remove old items from the cache
+		for items.Len() >= cache_limit {
+			e := items.Back();
+			paths[e.Value.(int64)] = nil, false;
+			items.Remove(e);
 		}
 		// generate a key
-		h := md5.New();
-		t, n, _ := os.Time();
-		h.Write(strings.Bytes(fmt.Sprintf("%v %v", t, n)));
-		key := hex.EncodeToString(h.Sum());
-		// add new item
-		cache.items.PushFront(&item{ data.(http.Handler), key});
-		cache.paths[key] = data.(http.Handler);
-		receive <- &msg { "", "/apage/" + key };
-	};
-	
-	server["serve-page"] = func(data interface{}) {
-		page, ok := cache.paths[data.(string)];
-		if !ok {
-			receive <- &msg { "", http.HandlerFunc(serveFail) };
+		var key int64;
+		done := false;
+		for !done {
+			key = rand.Int63();
+			if _, ok := paths[key]; !ok {
+				done = true;
+			}
 		}
-		receive <- &msg { "", page };
+		// add new item
+		items.PushFront(key);
+		paths[key] = data.(http.Handler);
+		// and return the path
+		return "/apage/" + strconv.Itoa64(key);
+	});
+	serveFail := func(c *http.Conn, r *http.Request) {
+		io.WriteString(c, "error while trying to serve page");
 	};
+	servePage := a.CreateHandler(func (data value) value {
+		page, ok := paths[data.(int64)];
+		if !ok {
+			return http.HandlerFunc(serveFail);
+		}
+		return page;
+	});
 	
 	// connect all this to the http library
 	http.Handle("/apage/", http.HandlerFunc(func (c *http.Conn, r *http.Request) {
 		ls := strings.Split(r.URL.Path, "/", 0);
-		send <- &msg { "serve-page", ls[len(ls)-1] };
-		m := <-receive;
-		h := m.d.(http.Handler);
-		h.ServeHTTP(c, r);
+		id, err := strconv.Atoi64(ls[len(ls)-1]);
+		if err != nil {
+			serveFail(c, r);
+		} else {
+			h := servePage(id).(http.Handler);
+			h.ServeHTTP(c, r);
+		}
 	}));
 }
 
