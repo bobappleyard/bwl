@@ -102,12 +102,17 @@ func Any(next State) State {
 type csState struct {
 	ContState
 	chars string
+	inv bool
 }
 
 func Charset(spec string, next State) (State, os.Error) {
 	var start int
-	inrange := false
+	inrange, inv := false, false
 	chars := ""
+	if spec[0] == '^' {
+		inv = true
+		spec = spec[1:]
+	}
 	for _, x := range spec {
 		switch {
 			case x == '-':
@@ -128,12 +133,16 @@ func Charset(spec string, next State) (State, os.Error) {
 	res := new(csState)
 	res.Init(next)
 	res.chars = chars
+	res.inv = inv
 	return res, nil
 }
 
 func (self *csState) Move(c int) []State {
-	ix := strings.Index(self.chars, string(c))
-	if ix != -1 {
+	found := strings.Index(self.chars, string(c)) != -1
+	if self.inv {
+		found = !found
+	}
+	if found {
 		return self.ContState.next
 	}
 	return []State {}
