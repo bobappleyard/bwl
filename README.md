@@ -1,4 +1,4 @@
-This repository collects some helper libraries for constructing web applications in Go. Well, OK, there's only one at the moment, but I think it's a good one!
+This repository collects some helper libraries for constructing applications in Go.
 
 apage -- Anonymous Pages
 ========================
