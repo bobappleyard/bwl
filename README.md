@@ -1,5 +1,8 @@
 This repository collects some helper libraries for constructing applications in Go.
 
+They're all licensed under GPLv3 or above. Nyah!
+
+
 apage -- Anonymous Pages
 ========================
 
@@ -60,8 +63,6 @@ http://swtch.com/~rsc/regexp/regexp1.html
 
 It's slightly less efficient than the aforementioned, as it creates more states than are strictly necessary. This is because I skipped out some of the processing when parsing the regex that the above author took when building the state graph. That part should probably be rewritten anyway -- spaghetti is a generous description of its current status.
 
-I'll license it under GPLv3 or above. Nyah!
-
 API
 ---
 
@@ -101,14 +102,23 @@ Supported Language
 The regex language is pretty standard, if basic
 
 a       -- matches `a`
+
 ab      -- matches `a` followed by `b`
+
 a|b     -- matches `a` or `b`
+
 (ab)|c  -- matches `a` followed by `b`, or `c`
+
 a?      -- matches zero or one occurrences of `a`
+
 a*      -- matches zero or more occurrences of `a`
+
 a+      -- matches one or more occurrences of `a`
+
 [a-d]   -- matches `a`, `b`, `c` or `d`
+
 [abcd]  -- same as above
+
 [-ab]   -- matches `-`, `a` or `b`
 
 That's it, so far.
