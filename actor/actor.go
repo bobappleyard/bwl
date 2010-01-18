@@ -14,14 +14,14 @@ type msg struct {
 }
 
 // An actor is a collection of functions that all run in the same goroutine,
-// but can be called to do work from any goroutine. It's like RPC for 
-// goroutines.
+// but can be called to do work from any goroutine. The requests to the actor
+// are serialised. 
 type Actor struct {
 	send chan *msg
 }
 
 func New() *Actor {
-	res := &Actor { make(chan *msg) }
+	res := &Actor { make(chan *msg, 20) }
 	go func() {
 		for {
 			m := <-res.send
@@ -61,3 +61,10 @@ func (self *Actor) Add(h Value) (func(Value) Value) {
 	panic("unreachable")
 }
 
+func (self *Actor) AddMany(h []Value) ([]func(Value) Value) {
+	res := make([]func(Value) Value, len(h))
+	for i, x := range h {
+		res[i] = self.Add(x);
+	}
+	return res;
+}
