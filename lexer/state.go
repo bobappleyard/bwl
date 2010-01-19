@@ -69,44 +69,44 @@ func (self *BasicState) SetFinal(f int) {
 
 /* More specialised stuff */
 
-type ContState struct {
+type SpecialState struct {
 	next []State
 }
 
-func (self *ContState) Init(next State) {
+func (self *SpecialState) SetNext(next State) {
 	self.next = []State { next }
 }
 
-func (self *ContState) Move(c int) []State {
+func (self *SpecialState) Move(c int) []State {
 	return self.next
 }
 
-func (self *ContState) Close() []State {
+func (self *SpecialState) Close() []State {
 	return []State {}
 }
 
-func (self *ContState) Final() int {
+func (self *SpecialState) Final() int {
 	return -1
 }
 
 /* Anything */
 
 func Any(next State) State {
-	res := new(ContState)
-	res.Init(next)
+	res := new(SpecialState)
+	res.SetNext(next)
 	return res
 }
 
 /* A state with charset stuff */
 
 type csState struct {
-	ContState
+	SpecialState
 	chars string
 	inv bool
 }
 
 func Charset(spec string, next State) (State, os.Error) {
-	var start int
+	start := 0
 	inrange, inv := false, false
 	chars := ""
 	if spec[0] == '^' {
@@ -131,7 +131,7 @@ func Charset(spec string, next State) (State, os.Error) {
 		}
 	}
 	res := new(csState)
-	res.Init(next)
+	res.SetNext(next)
 	res.chars = chars
 	res.inv = inv
 	return res, nil
@@ -143,7 +143,8 @@ func (self *csState) Move(c int) []State {
 		found = !found
 	}
 	if found {
-		return self.ContState.next
+		return self.SpecialState.next
 	}
 	return []State {}
 }
+

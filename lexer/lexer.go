@@ -95,13 +95,17 @@ func (self *Lexer) Root() *BasicState {
 	return self.root
 }
 
-func (self *Lexer) Start(src string) {
-	self.src = strings.Runes(src)
+func (self *Lexer) Start(src []int) {
+	self.src = src
 	self.pos = 0
 }
 
+func (self *Lexer) StartString(src string) {
+	self.Start(strings.Runes(src))
+}
+
 func (self *Lexer) StartBytes(src []byte) {
-	self.Start(string(src))
+	self.StartString(string(src))
 }
 
 func (self *Lexer) Next() int {
@@ -137,7 +141,8 @@ func (self *Lexer) Next() int {
 	res := FAIL
 	for m := range fin.Iter() {
 		match := m.(*finishState)
-		if match.pos > self.pos {
+		if match.pos > self.pos || 
+		  (match.pos == self.pos && match.id < res) {
 			res = match.id
 			self.pos = match.pos
 		}
@@ -153,7 +158,7 @@ func (self *Lexer) Position() int {
 	return self.startPos
 }
 
-func (self *Lexer) Length() int {
+func (self *Lexer) Len() int {
 	return self.pos - self.startPos
 }
 

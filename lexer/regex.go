@@ -2,21 +2,89 @@ package lexer
 
 import (
 	"os"
-	"fmt"
-	v "container/vector"
+	"container/vector"
+	"strings"
+	"./errors"
 )
+
+type Metachars map[int] string
+
+var defaultMeta = Metachars {
+	'w': "(\\a|\\d|_)",
+	's': "[ \t\n\r]",
+	'a': "[a-zA-Z]",
+	'd': "[0-9]",
+	'W': "[^a-zA-Z0-9_]",
+	'S': "[^ \t\n\r]",
+	'A': "[^a-zA-Z]",
+	'D': "[^0-9]",
+}
+
+func (self *Lexer) Regex(re string, m Metachars) (*BasicState, os.Error) {
+	return AddRegex(self.root, re, m)
+}
+
+type Regex struct {
+	l, lm *Lexer
+}
+
+func NewRegex(re string, m Metachars) *Regex {
+	l, lm := New(), New()
+	s, err := l.Regex(re, m)
+	errors.Fatal(err)
+	t, _ := lm.Regex(re, m)
+	u, _ := lm.Regex(".", nil)
+	s.SetFinal(0)
+	t.SetFinal(0)
+	u.SetFinal(1)
+	return &Regex { l, lm }
+}
+
+func (self *Regex) Match(s string) bool {
+	src := strings.Runes(s)
+	l := self.l
+	l.Start(src)
+	if l.Next() == 0 {
+		return self.l.Len() == len(src)
+	}
+	return false
+}
+
+func (self *Regex) Matches(s string) []string {
+	res := new(vector.StringVector)
+	l := self.lm
+	l.StartString(s)
+	for !l.Eof() {
+		if l.Next() == 0 {
+			res.Push(l.String())
+		}
+	}
+	return res.Data()
+}
+
+func Match(re, s string) bool {
+	expr := NewRegex(re, nil)
+	return expr.Match(s)
+}
+
+func Matches(re, s string) []string {
+	expr := NewRegex(re, nil)
+	return expr.Matches(s)
+}
 
 type regexPos struct {
 	start, end *BasicState
 }
 
-func (self *Lexer) AddRegex(re string, f int) os.Error {
+func AddRegex(start *BasicState, re string, m Metachars) (*BasicState, os.Error) {
+	if m == nil {
+		m = defaultMeta
+	}
 	// this is just the sort of horror show that lexical analysis avoids
 
 	// stack machine
-	start := self.root
 	end := NewState()
-	stack := new(v.Vector)
+	stack := new(vector.Vector)
 	
 	// is it ok for a modifier to appear?
 	expr := false
@@ -53,6 +121,18 @@ func (self *Lexer) AddRegex(re string, f int) os.Error {
 	for _, c := range re {
 		if esc {
 			esc = false
+			// check out the metachar action
+			if meta, ok := m[c]; ok {
+				move()
+				s, err := AddRegex(start, meta, m)
+				if err != nil {
+					return nil, err
+				}
+				s.AddEmptyTransition(end)
+				expr = true
+				continue
+			}
+			// nothing going on? well you escaped it for a reason
 			goto add
 		}
 		if cs && c != ']' {
@@ -70,11 +150,11 @@ func (self *Lexer) AddRegex(re string, f int) os.Error {
 				cs = true
 			case ']':
 				if !cs {
-					return os.ErrorString("trying to close unopened charset")
+					return nil, os.ErrorString("trying to close unopened charset")
 				}
 				chars, err := Charset(setstr, end)
 				if err != nil {
-					return err
+					return nil, err
 				}
 				start.AddEmptyTransition(chars)
 				cs = false
@@ -86,7 +166,7 @@ func (self *Lexer) AddRegex(re string, f int) os.Error {
 				expr = false
 			case ')':
 				if stack.Len() <= 1 {
-					return os.ErrorString("trying to close unopened subexpr")
+					return nil, os.ErrorString("trying to close unopened subexpr")
 				}
 				pop()
 				expr = true
@@ -118,7 +198,7 @@ func (self *Lexer) AddRegex(re string, f int) os.Error {
 		// make sure the modifier modified something
 	check:
 		if !expr { 
-			return os.ErrorString("nothing to modify") 
+			return nil, os.ErrorString("nothing to modify") 
 		}
 		expr = false
 		continue
@@ -131,35 +211,21 @@ func (self *Lexer) AddRegex(re string, f int) os.Error {
 	}
 	
 	if cs {
-		return os.ErrorString("unclosed charset")
+		return nil, os.ErrorString("unclosed charset")
 	}
 	
 	if esc {
-		return os.ErrorString("invalid escape sequence")
+		return nil, os.ErrorString("invalid escape sequence")
 	}
 	
 	if stack.Len() > 1 {
-		return os.ErrorString("unclosed subexpr")
+		return nil, os.ErrorString("unclosed subexpr")
 	}
 	
 	// close the implicit brackets
 	pop()
 	
-	// mark the regex end point
-	end.SetFinal(f)
-	
-	return nil
+	return end, nil
 }
-
-func NewRegex(re string) *Lexer {
-	res := New()
-	err := res.AddRegex(re, 1)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %s\n", err)
-		os.Exit(1)
-	}
-	return res
-}
-
 
 
