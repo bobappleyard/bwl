@@ -24,19 +24,28 @@ func (self *Lexer) Regex(re string, m Metachars) (*BasicState, os.Error) {
 	return AddRegex(self.root, re, m)
 }
 
+func (self *Lexer) ForceRegex(re string, m Metachars) *BasicState {
+	res, err := self.Regex(re, m)
+	errors.Fatal(err)
+	return res
+}
+
+func (self *Lexer) Regexes(start int, m Metachars, res []string) {
+	for i, x := range res {
+		self.ForceRegex(x, m).SetFinal(start + i)
+	}
+}
+
 type Regex struct {
 	l, lm *Lexer
 }
 
 func NewRegex(re string, m Metachars) *Regex {
 	l, lm := New(), New()
-	s, err := l.Regex(re, m)
-	errors.Fatal(err)
-	t, _ := lm.Regex(re, m)
-	u, _ := lm.Regex(".", nil)
-	s.SetFinal(0)
-	t.SetFinal(0)
-	u.SetFinal(1)
+	// build on exising abstractions
+	l.ForceRegex(re, m).SetFinal(0)
+	lm.ForceRegex(re, m).SetFinal(0)
+	lm.ForceRegex(".", nil).SetFinal(1)
 	return &Regex { l, lm }
 }
 

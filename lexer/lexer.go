@@ -37,7 +37,7 @@ func close(from []State) []State {
 			ss := x.Close()
 			if len(ss) != 0 {
 				newres := union(res, ss)
-				if len(newres) != len(res) {
+				if len(newres) > len(res) {
 					res = newres
 					done = false
 				}
@@ -104,10 +104,6 @@ func (self *Lexer) StartString(src string) {
 	self.Start(strings.Runes(src))
 }
 
-func (self *Lexer) StartBytes(src []byte) {
-	self.StartString(string(src))
-}
-
 func (self *Lexer) Next() int {
 	if self.src == nil {
 		return FAIL
@@ -162,8 +158,12 @@ func (self *Lexer) Len() int {
 	return self.pos - self.startPos
 }
 
+func (self *Lexer) Data() []int {
+	return self.src[self.startPos:self.pos]
+}
+
 func (self *Lexer) String() string {
-	return string(self.src[self.startPos:self.pos])
+	return string(self.Data())
 }
 
 

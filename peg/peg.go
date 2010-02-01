@@ -5,98 +5,17 @@ package peg
 */
 
 import (
-	"bufio"
-	"fmt"
-	"io"
-	"os"
-	"path"
 	"container/vector"
-	"strings"
 )
-
-/*
-	The position interface defines moving through a source
-*/
-
-type Value interface {}
-
-type Position interface {
-	Next() Position
-	Fail() Position
-	Failed() bool
-	Eof() bool
-	Data() Value
-}
-
-// "inherit" from this and get default behaviour for everything but Next()
-type PosDefaults struct {}
-
-// this is used by the default implementation to implement failures
-type failure struct {
-	PosDefaults
-	reason string
-}
-
-func (self *failure) Next() Position {
-	return self
-}
-
-func (self *failure) Fail(reason string) Position {
-	return self
-}
-
-func (self *failure) Failed() bool {
-	return true
-}
-
-func (self *failure) String() string {
-	return reason
-}
-
-
-func (self *PosDefaults) Fail(reason string) Position {
-	res := new(failure)
-	res.reason = reason
-	return res
-}
-
-func (self *PosDefaults) Failed() bool {
-	return false
-}
-
-func (self *PosDefaults) Eof() bool {
-	return false
-}
-
-func (self *PosDefaults) Data() Value {
-	return nil
-}
-
-type eofObj struct {
-	PosDefaults
-}
-
-var EofObject = func() Position {
-	res := new(eofObj)
-	return res
-}()
-
-func (self *EofObj) Next() Value {
-	return self.Fail()
-}
-
-func (self *EofObj) Eof() bool {
-	return true
-}
-
-
 
 /*
 	An expression interface
 	
 	Expresssions match a position in the source, or not. The Match method
 	should return the position in the input just after the end of the region
-	matched.
+	matched, along with the data corresponding to the region matched. This 
+	could be a string of the text region itself, or it could be an object
+	representing the appropriate part of a syntax tree.
 	
 	A Matcher is a function that looks like an expression object. This 
 	simplifies the creation of new peg forms where being able to treat the 
@@ -134,7 +53,7 @@ var Eof = Matcher(func(m Position) (Position, Value) {
 
 func Terminal(c int) Expr {
 	return Matcher(func(m Position) (Position, Value) {
-		if m.char == c {
+		if m.Id() == c {
 			return m.Next(), m.Data()
 		}
 		return m.Fail(), nil
@@ -161,7 +80,7 @@ func (e And) Match(m Position) (Position, Value) {
 type Or []Expr
 
 func (e Or) Match(m Position) (cur Position, res Value) {
-	for i, x := range e {
+	for _, x := range e {
 		cur, res = x.Match(m)
 		if !cur.Failed() {
 			return
@@ -178,11 +97,11 @@ func Extensible () *ExtensibleExpr {
 	return &ExtensibleExpr { new(vector.Vector) }
 }
 
-func (self *Extensible) Add(e Expr) {
+func (self *ExtensibleExpr) Add(e Expr) {
 	self.es.Push(e)
 }
 
-func (self *Extensible) Match(m Position) (Position, Value) {
+func (self *ExtensibleExpr) Match(m Position) (Position, Value) {
 	for _, e := range self.es.Data() {
 		n, res := e.(Expr).Match(m)
 		if !n.Failed() {
@@ -267,7 +186,10 @@ func Prevent(e Expr) Expr {
 }
 
 func RepeatUntil(e, end Expr) Expr {
-	return Repeat(Select(And { Prevent(end), e }, 1))
+	return Select(And { 
+		Repeat(Select(And { Prevent(end), e }, 1)), 
+		end,
+	}, 0)
 }
 
 /*
@@ -340,34 +262,5 @@ func Select(e Expr, n int) Expr {
 	return Bind(e, func(v Value) Value {
 		return v.([]Value)[n]
 	})
-}
-
-/*
-	Giving it a nice interface
-*/
-
-func MatcherInput(r io.Reader) Input {
-	return bufio.NewReader(r)
-}
-
-func ParseNamed(e Expr, fn string, src Input) (Position, Value) {
-	return e.Match(start(fn, src))
-}
-
-func Parse(e Expr, src Input) (Position, Value) {
-	return ParseNamed(e, "", src)
-}
-
-func ParseString(e Expr, src string) (Position, Value) {
-	return Parse(e, MatcherInput(strings.NewReader(src)))
-}
-
-func ParseFile(e Expr, fn string) (Position, Value) {
-	_, name := path.Split(fn)
-	f, err := os.Open(fn, os.O_RDONLY, 0)
-	if err != nil {
-		return new(Position).Fail(), nil
-	}
-	return ParseNamed(e, name, MatcherInput(f))
 }
 
