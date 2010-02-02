@@ -21,14 +21,13 @@ import (
 	simplifies the creation of new peg forms where being able to treat the 
 	expression as a slice or struct or what have you isn't desired.
 */
-
 type Expr interface {
-	Match(m Position) (Position, Value)
+	Match(m Position) (Position, interface{})
 }
 
-type Matcher func(m Position) (Position, Value)
+type Matcher func(m Position) (Position, interface{})
 
-func (e Matcher) Match(m Position) (Position, Value) {
+func (e Matcher) Match(m Position) (Position, interface{}) {
 	return e(m)
 }
 
@@ -36,28 +35,28 @@ func (e Matcher) Match(m Position) (Position, Value) {
 	Primitive Expressions
 */
 
-var Any = Matcher(func(m Position) (Position, Value) {
+var Any = Matcher(func(m Position) (Position, interface{}) {
 	return m.Next(), m.Data()
 })
 
-var None = Matcher(func(m Position) (Position, Value) {
+var None = Matcher(func(m Position) (Position, interface{}) {
 	return m.Fail(), nil
 })
 
-var Eof = Matcher(func(m Position) (Position, Value) {
+var Eof = Matcher(func(m Position) (Position, interface{}) {
 	if m.Eof() {
 		return m, nil
 	}
 	return m.Fail(), nil
 })
 
-func Terminal(c int) Expr {
-	return Matcher(func(m Position) (Position, Value) {
-		if m.Id() == c {
-			return m.Next(), m.Data()
-		}
-		return m.Fail(), nil
-	})
+type Terminal int
+
+func (self Terminal) Match(m Position) (Position, interface{}) {
+	if m.Id() == self {
+		return m.Next(), m.Data()
+	}
+	return m.Fail(), nil
 }
 
 /*
@@ -66,8 +65,8 @@ func Terminal(c int) Expr {
 
 type And []Expr
 
-func (e And) Match(m Position) (Position, Value) {
-	res := make([]Value, len(e))
+func (e And) Match(m Position) (Position, interface{}) {
+	res := make([]interface{}, len(e))
 	for i, x := range e {
 		if m.Failed() {
 			return m, nil
@@ -79,7 +78,7 @@ func (e And) Match(m Position) (Position, Value) {
 
 type Or []Expr
 
-func (e Or) Match(m Position) (cur Position, res Value) {
+func (e Or) Match(m Position) (cur Position, res interface{}) {
 	for _, x := range e {
 		cur, res = x.Match(m)
 		if !cur.Failed() {
@@ -101,7 +100,7 @@ func (self *ExtensibleExpr) Add(e Expr) {
 	self.es.Push(e)
 }
 
-func (self *ExtensibleExpr) Match(m Position) (Position, Value) {
+func (self *ExtensibleExpr) Match(m Position) (Position, interface{}) {
 	for _, e := range self.es.Data() {
 		n, res := e.(Expr).Match(m)
 		if !n.Failed() {
@@ -120,8 +119,8 @@ type quantifiedExpr struct {
 	min, max int
 }
 
-func (e *quantifiedExpr) Match(m Position) (Position, Value) {
-	var item Value
+func (e *quantifiedExpr) Match(m Position) (Position, interface{}) {
+	var item interface{}
 	cur := m
 	res := new(v.Vector)
 	// guaranteed minimum
@@ -150,15 +149,15 @@ func Quantify(e Expr, min, max int) Expr {
 }
 
 func Option(e Expr) Expr {
-	return Modify(e, 0, 1)
+	return Quantify(e, 0, 1)
 }
 
 func Repeat(e Expr) Expr {
-	return Modify(e, 0, -1)
+	return Quantify(e, 0, -1)
 }
 
 func Multi(e Expr) Expr {
-	return Modify(e, 1, -1)
+	return Quantify(e, 1, -1)
 }
 
 /*
@@ -166,7 +165,7 @@ func Multi(e Expr) Expr {
 */
 
 func Ensure(e Expr) Expr {
-	return Matcher(func (m Position) (Position, Value) {
+	return Matcher(func (m Position) (Position, interface{}) {
 		n, _ := e.Match(m)
 		if n.Failed() {
 			return n, nil
@@ -176,7 +175,7 @@ func Ensure(e Expr) Expr {
 }
 
 func Prevent(e Expr) Expr {
-	return Matcher(func (m Position) (Position, Value) {
+	return Matcher(func (m Position) (Position, interface{}) {
 		n, _ := e.Match(m)
 		if n.Failed() {
 			return m, nil
@@ -207,7 +206,7 @@ func Recursive() *RecursiveExpr {
 	return new(RecursiveExpr)
 }
 
-func (e *RecursiveExpr) Match(m Position) (Position, Value) {
+func (e *RecursiveExpr) Match(m Position) (Position, interface{}) {
 	if e.e == nil {
 		return m.Fail(), nil
 	}
@@ -225,8 +224,8 @@ func (e *RecursiveExpr) Set(val Expr) {
 	Processing data
 */
 
-func Bind(e Expr, f func(Value) Value) Expr {
-	return Matcher(func (m Position) (Position, Value) {
+func Bind(e Expr, f func(interface{}) interface{}) Expr {
+	return Matcher(func (m Position) (Position, interface{}) {
 		n, x := e.Match(m)
 		if n.Failed() {
 			return n, nil
@@ -235,17 +234,28 @@ func Bind(e Expr, f func(Value) Value) Expr {
 	})
 }
 
-func Fold(e Expr, acc Value, f func(x, acc Value) Value) Expr {
-	return Bind(e, func(v Value) Value {
-		for _, x := range v.([]Value) {
+func Fold(e Expr, acc interface{}, f func(x, acc interface{}) interface{}) Expr {
+	return Bind(e, func(v interface{}) interface{} {
+		for _, x := range v.([]interface{}) {
 			acc = f(x, acc)
 		}
 		return acc
 	})
 }
 
+func Map(e Expr, f func(interface{}) interface{}) Expr {
+	return Bind(e, func(v interface{}) interface{} {
+		xs := v.([]interface{})
+		res := make([]interface{}, len(xs))
+		for i, x := range xs {
+			res[i] = f(x)
+		}
+		return res
+	})
+}
+
 func Join(e Expr, sep string) Expr {
-	return Fold(e, "", func(x_, acc_ Value) Value {
+	return Fold(e, "", func(x_, acc_ interface{}) interface{} {
 		x, acc := x_.(string), acc_.(string)
 		if acc == "" {
 			return x
@@ -259,8 +269,8 @@ func Merge(e Expr) Expr {
 }
 
 func Select(e Expr, n int) Expr {
-	return Bind(e, func(v Value) Value {
-		return v.([]Value)[n]
+	return Bind(e, func(v interface{}) interface{} {
+		return v.([]interface{})[n]
 	})
 }
 

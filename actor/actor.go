@@ -5,12 +5,10 @@ import (
 	"os"
 )
 
-type Value interface{}
-
 type msg struct {
-	f func(Value) Value
-	data Value
-	recv chan Value
+	f func(interface{}) interface{}
+	data interface{}
+	recv chan interface{}
 }
 
 // An actor is a collection of functions that all run in the same goroutine,
@@ -34,12 +32,12 @@ func New() *Actor {
 	return res
 }
 
-func (self *Actor) Add(h Value) (func(Value) Value) {
+func (self *Actor) Add(h interface{}) (func(interface{}) interface{}) {
 	switch handler := h.(type) {
-		case func(Value):
-			return func(d Value) Value {
+		case func(interface{}):
+			return func(d interface{}) interface{} {
 				self.send <- &msg { 
-					func (e Value) Value { 
+					func (e interface{}) interface{} { 
 						handler(e) 
 						return nil 
 					}, 
@@ -48,9 +46,9 @@ func (self *Actor) Add(h Value) (func(Value) Value) {
 				}
 				return nil
 			}
-		case func(Value) Value:
-			return func(d Value) Value {
-				recv := make(chan Value)
+		case func(interface{}) interface{}:
+			return func(d interface{}) interface{} {
+				recv := make(chan interface{})
 				self.send <- &msg { handler, d, recv }
 				return <- recv
 			}
@@ -61,8 +59,8 @@ func (self *Actor) Add(h Value) (func(Value) Value) {
 	panic("unreachable")
 }
 
-func (self *Actor) AddMany(h []Value) ([]func(Value) Value) {
-	res := make([]func(Value) Value, len(h))
+func (self *Actor) AddMany(h []interface{}) ([]func(interface{}) interface{}) {
+	res := make([]func(interface{}) interface{}, len(h))
 	for i, x := range h {
 		res[i] = self.Add(x);
 	}

@@ -104,7 +104,7 @@ func newLex(l *lexer.Lexer) *lexPos {
 	return res
 }
 
-func Lexer(l *lexer.Lexer) Position {
+func Token(l *lexer.Lexer) Position {
 	return newLex(l).Next()
 }
 

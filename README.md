@@ -2,6 +2,21 @@ This repository collects some helper libraries for constructing applications in 
 
 They're all licensed under GPLv3 or above. Nyah!
 
+actor -- A Simple Serialisation Mechanism
+=========================================
+
+This library provides the Actor type, which is one way of performing concurrent calculations. It groups together a set of functions. These functions can be invoked from any goroutine, and the invocations are serialised into a single goroutine. This could be used to simplify access to a resource, but it also forms the basis of an interesting way of composing concurrent applications, the "actor model."
+
+Create this goroutine and the associated management by calling actor.New(). Then you call Add() on the resulting object to have a function you pass in come under the purview of the Actor. Add returns the function you should call to get the Actor to do the specified work.
+
+There are two types of function that an Actor manages:
+
+    func(interface{})
+    func(interface{}) interface{}
+    
+The first typed will be called asynchronously (this is to be preferred). The Actor will return nil immediately. The second type, when it is called, will cause the goroutine making the call to wait for the result to be produced. 
+
+For an example of this library in use, check out the apage server.
 
 apage -- Anonymous Pages
 ========================
@@ -53,6 +68,10 @@ An example, the Arc Challenge:
 
 Obviously not as nice as the Arc version, all that string writing stuff is a bit off, but you get the idea.
 
+API
+---
+
+There are three functions in the API. SetCacheSize() tells the library how many anonymous page handlers to keep cached. Setting this to a large number will lead to increased memory usage, setting it to a small number may cause the library to "forget" page handlers before users might need them. Handle() attaches a http.Handler to the library. Create() does the same, but assumes it's a function and does the type conversion for you.
 
 lexer -- A simple lexical analyser
 ==================================
@@ -73,28 +92,30 @@ While it is possible to manipulate the state graph manually, using the regex par
 e.g.
 
 	  const (
-		  IDENT = iota;
-		  NUMBER;
+		  IDENT = iota
+		  NUMBER
 		  ...
 	  )
 
 	  ...
 
 		  l := new(lexer.Lexer);
-		  l.AddRegex(`[a-zA-Z_][0-9a-zA-Z_]*`, IDENT);
-		  l.AddRegex(`[0-9]+(\.[0-9]+)?`, NUMBER);
+		  l.ForceRegex(`[a-zA-Z_][0-9a-zA-Z_]*`, IDENT)
+		  l.ForceRegex(`[0-9]+(\.[0-9]+)?`, NUMBER)
 		
 	  ...
-		  l.Start(src);
+		  l.Start(src)
 		  switch l.Next() {
 		      case IDENT:
-		          return NewIdent(l.String()); // do something with the result
+		          return NewIdent(l.String()) // do something with the result
 		      case NUMBER:
 		      ...
 		      
 		      case -1:
 		        // handle failure
 		  }
+
+For some more examples of using the interface, see the regex.go file in the library.
 
 Supported Language
 ------------------
@@ -122,5 +143,104 @@ a+      -- matches one or more occurrences of `a`
 [-ab]   -- matches `-`, `a` or `b`
 
 That's it, so far.
+
+
+
+peg -- A Parser Library
+=======================
+
+PEG parsers are all the rage these days. Go makes writing them particularly easy. There are, principally, two concepts introduced in this library. The first is the Position interface:
+
+    type Position interface {
+    	Next() Position
+    	Fail() Position
+    	Pos() int
+    	Failed() bool
+    	Eof() bool
+    	Id() int
+    	Data() interface{}
+    }
+
+This describes a position in the source. The two main methods are listed first: Next() moves through the source, Fail() aborts the parse. Id() is also important as it identifies the kind of data at that position (e.g. the character code or the token id).
+
+The second is the Expr interface:
+
+    type Expr interface {
+    	Match(m Position) (Position, interface{})
+    }
+
+This describes a PEG expression. If it succeeds in matching at a particular position, it should return (that position).Next(). If it does not it should call Fail().
+
+The bulk of the library consists of different kinds of expressions.
+
+Matcher -- a function that looks like an Expr. Useful for simple expressions that don't need to be represented as structs or slices or anything like that.
+
+Any         -- always matches.
+
+None        -- never matches.
+
+Eof         -- matches against the end of the input.
+
+Terminal    -- an integer type that matches against the Id() method of the Position passed in, and returns the Position's Data() if it matches.
+
+And         -- a slice type representing a series of expressions that must all match, in order, for the whole expression to match. The data part is a slice containing the data parts of each of the subexpressions.
+
+Or          -- a slice type representing a choice of expressions. The first subexpression to match will be what the Or matches to at the given position.
+
+Extensible  -- returns an ExtensibleExpr that behaves like Or when matching, but can have extra alternatives incorporated through calls to Add().
+
+Quantify    -- returns an expression object that repeats the matching of another expression a given number of times. Given are a maximum and minumum number of repetitions. The maximum being -1 corresponds to there being no maximum.
+
+Option      -- is equivalent to Quantify(<expr>, 0, 1).
+
+Repeat      -- is equivalent to Quantify(<expr>, 0, -1).
+
+Multi       -- is equivalent to Quantify(<expr>, 1, -1).
+
+Ensure      -- returns an expression that performs lookahead. That is, it matches on an expression passed in, but instead of returning the Position *after* the match, returns the Position before (that is, it returns the Position passed into Match()).
+
+Prevent     -- returns an expression that behaves like Ensure, but only matches when the expression passed in does not match.
+
+RepeatUntil -- returns an expression that continues matching one expression, until another expression matches, before returning. If the first expression does not match at any point, the entire expression will fail.
+
+Recursive   -- returns a RecursiveExpr that has a Set() method. This sets the actual expression to be matched. Recursive is useful when defining expressions in terms of themselves. Note that so-called "left recursion" should be guarded against (this is also true of Extensible).
+
+Bind        -- returns an expression object whereby the data returned on Match() is subject to processing.
+
+Fold        -- returns an expression object that applies a function over every item in the data returned from a match, given that the data is a slice of interface{}s. Expression types that do this in the PEG library include And, Quantify, Option, Repeat, Multi and RepeatUntil. This result is accumulated into a single value.
+
+Map         -- returns an expression object that applies a function over every item in the data returned from a match, given that the data is a slice of interface{}s. This result is accumulated into a slice of the same length.
+
+Join        -- returns an expression object that assumes the data it is processing is a slice of strings. It collects those strings together into one string, with a separator between them.
+
+Merge       -- equivalent to Join(<expr>, "")
+
+Select      -- returns an expression object that assumes the data it is processing is a slice of interface{}s. Returns a given element of said slice upon matching.
+
+Using Terminals
+---------------
+
+Terminals are the main primitive in the PEG library. The PEG is effectively processing a series of integers. We can return to the lexer example, and by changing the const declaration so that it reads:
+
+      const (
+		  IDENT peg.Terminal = iota
+		  NUMBER
+		  ...
+	  )
+
+Will allow tokens parsed by the lexer to be used by the PEG.
+
+One could also, assuming the character stream input, create a matcher for a string by doing something like:
+
+    func String(s string) peg.Expr {
+        rs := strings.Runes(s)
+        res := make(peg.And, len(rs))
+        for i, x := range rs {
+            res[i] = peg.Terminal(x)
+        }
+        return res
+    }
+
+This is not included in the library because using the lexer for this sort of thing is preferred.
 
 

@@ -11,7 +11,7 @@ import (
 )
 
 // API
-var setCache, addHandler func(actor.Value) actor.Value 
+var setCache, addHandler func(interface{}) interface{} 
 
 // Changes the maximum number of items in the handler cache.
 func SetCacheSize(newSize int) {
@@ -40,10 +40,10 @@ func init() {
 	// start the server
 	a := actor.New()
 	// register some message handlers
-	setCache = a.Add(func (data actor.Value) {
+	setCache = a.Add(func (data interface{}) {
 		cache_limit = data.(int)
 	})
-	addHandler = a.Add(func (data actor.Value) actor.Value {
+	addHandler = a.Add(func (data interface{}) interface{} {
 		// remove old items from the cache
 		for items.Len() >= cache_limit {
 			e := items.Back()
@@ -68,7 +68,7 @@ func init() {
 	serveFail := func(c *http.Conn, r *http.Request) {
 		io.WriteString(c, "error while trying to serve page")
 	}
-	servePage := a.Add(func (data actor.Value) actor.Value {
+	servePage := a.Add(func (data interface{}) interface{} {
 		page, ok := paths[data.(int64)]
 		if !ok {
 			return http.HandlerFunc(serveFail)
