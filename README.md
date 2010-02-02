@@ -200,11 +200,11 @@ Extensible  -- returns an ExtensibleExpr that behaves like Or when matching, but
 
 Quantify    -- returns an expression object that repeats the matching of another expression a given number of times. Given are a maximum and minumum number of repetitions. The maximum being -1 corresponds to there being no maximum.
 
-Option      -- is equivalent to Quantify(<expr>, 0, 1).
+Option      -- is equivalent to Quantify(\<expr\>, 0, 1).
 
-Repeat      -- is equivalent to Quantify(<expr>, 0, -1).
+Repeat      -- is equivalent to Quantify(\<expr\>, 0, -1).
 
-Multi       -- is equivalent to Quantify(<expr>, 1, -1).
+Multi       -- is equivalent to Quantify(\<expr\>, 1, -1).
 
 Ensure      -- returns an expression that performs lookahead. That is, it matches on an expression passed in, but instead of returning the Position *after* the match, returns the Position before (that is, it returns the Position passed into Match()).
 
@@ -220,7 +220,7 @@ Map         -- returns an expression object that applies a function over every i
 
 Join        -- returns an expression object that assumes the data it is processing is a slice of strings. It collects those strings together into one string, with a separator between them.
 
-Merge       -- equivalent to Join(<expr>, "")
+Merge       -- equivalent to Join(\<expr\>, "")
 
 Select      -- returns an expression object that assumes the data it is processing is a slice of interface{}s. Returns a given element of said slice upon matching.
 
