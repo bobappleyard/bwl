@@ -73,6 +73,12 @@ API
 
 There are three functions in the API. SetCacheSize() tells the library how many anonymous page handlers to keep cached. Setting this to a large number will lead to increased memory usage, setting it to a small number may cause the library to "forget" page handlers before users might need them. Handle() attaches a http.Handler to the library. Create() does the same, but assumes it's a function and does the type conversion for you.
 
+
+errors -- Error Handling
+========================
+
+This library currently contains a single function, Fatal(), that, when given an os.Error, crashes the program with a stack trace, along with the error's message, if that error is not nil. This makes writing toplevel programs slightly easier, along with functions that absolutely must succeed.
+
 lexer -- A simple lexical analyser
 ==================================
 
@@ -171,6 +177,9 @@ The second is the Expr interface:
 
 This describes a PEG expression. If it succeeds in matching at a particular position, it should return (that position).Next(). If it does not it should call Fail().
 
+Expressions
+-----------
+
 The bulk of the library consists of different kinds of expressions.
 
 Matcher -- a function that looks like an Expr. Useful for simple expressions that don't need to be represented as structs or slices or anything like that.
@@ -181,13 +190,13 @@ None        -- never matches.
 
 Eof         -- matches against the end of the input.
 
-Terminal    -- an integer type that matches against the Id() method of the Position passed in, and returns the Position's Data() if it matches.
+Terminal    -- an integer type that matches against the Id() method of the Position passed in, and returns the Position's Data() if it matches. Terminals are an important building block to PEGs. For some more information on handling them, see below.
 
 And         -- a slice type representing a series of expressions that must all match, in order, for the whole expression to match. The data part is a slice containing the data parts of each of the subexpressions.
 
 Or          -- a slice type representing a choice of expressions. The first subexpression to match will be what the Or matches to at the given position.
 
-Extensible  -- returns an ExtensibleExpr that behaves like Or when matching, but can have extra alternatives incorporated through calls to Add().
+Extensible  -- returns an ExtensibleExpr that behaves like Or when matching, but can have extra alternatives incorporated through calls to Add(). Note that "left recursion" should be guarded against. If you add an Extensible to itself, an infinite loop will occur during matching. This is also true if you add anything where the first item is the extensible.
 
 Quantify    -- returns an expression object that repeats the matching of another expression a given number of times. Given are a maximum and minumum number of repetitions. The maximum being -1 corresponds to there being no maximum.
 
@@ -202,8 +211,6 @@ Ensure      -- returns an expression that performs lookahead. That is, it matche
 Prevent     -- returns an expression that behaves like Ensure, but only matches when the expression passed in does not match.
 
 RepeatUntil -- returns an expression that continues matching one expression, until another expression matches, before returning. If the first expression does not match at any point, the entire expression will fail.
-
-Recursive   -- returns a RecursiveExpr that has a Set() method. This sets the actual expression to be matched. Recursive is useful when defining expressions in terms of themselves. Note that so-called "left recursion" should be guarded against (this is also true of Extensible).
 
 Bind        -- returns an expression object whereby the data returned on Match() is subject to processing.
 
@@ -241,6 +248,8 @@ One could also, assuming the character stream input, create a matcher for a stri
         return res
     }
 
-This is not included in the library because using the lexer for this sort of thing is preferred.
+This is not included in the library because using the lexer for this sort of thing is preferred. If anyone cares, it could be put in, but unlike all the other expression types listed above, it matters what sort of input the PEG is processing.
+
+
 
 

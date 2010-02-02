@@ -192,35 +192,6 @@ func RepeatUntil(e, end Expr) Expr {
 }
 
 /*
-	Recursion support
-	
-	Note that one must guard against left recursion.
-*/
-
-type RecursiveExpr struct {
-	e Expr
-	set bool
-}
-
-func Recursive() *RecursiveExpr {
-	return new(RecursiveExpr)
-}
-
-func (e *RecursiveExpr) Match(m Position) (Position, interface{}) {
-	if e.e == nil {
-		return m.Fail(), nil
-	}
-	return e.e.Match(m)
-}
-
-func (e *RecursiveExpr) Set(val Expr) {
-	if !e.set {
-		e.e = val
-	}
-	e.set = true
-}
-
-/*
 	Processing data
 */
 
