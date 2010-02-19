@@ -106,8 +106,8 @@ e.g.
 	  ...
 
 		  l := new(lexer.Lexer);
-		  l.ForceRegex(`[a-zA-Z_][0-9a-zA-Z_]*`, IDENT)
-		  l.ForceRegex(`[0-9]+(\.[0-9]+)?`, NUMBER)
+		  l.ForceRegex(`[a-zA-Z_][0-9a-zA-Z_]*`).SetFinal(IDENT)
+		  l.ForceRegex(`[0-9]+(\.[0-9]+)?`).SetFinal(NUMBER)
 		
 	  ...
 		  l.Start(src)
@@ -121,12 +121,13 @@ e.g.
 		        // handle failure
 		  }
 
+
 For some more examples of using the interface, see the regex.go file in the library.
 
 Supported Language
 ------------------
 
-The regex language is pretty standard, if basic
+The regex language is pretty standard, if a little basic
 
 a       -- matches `a`
 
@@ -148,9 +149,14 @@ a+      -- matches one or more occurrences of `a`
 
 [-ab]   -- matches `-`, `a` or `b`
 
-That's it, so far.
+[^a]    -- matches anything but `a`
 
+\a      -- *escapes* `a`: if `a` is a metacharacter (see below) then it matches the appropriate expression. Otherwise, it matches `a`. This is useful for matching on characters with special meaning, e.g. `\?` matches `?` where ordinarily an error would be thrown.
 
+Metacharacters
+--------------
+
+Metacharacters are characters that stand for regular expressions. When the regular expression 
 
 peg -- A Parser Library
 =======================

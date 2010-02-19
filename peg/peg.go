@@ -27,8 +27,8 @@ type Expr interface {
 
 type Matcher func(m Position) (Position, interface{})
 
-func (e Matcher) Match(m Position) (Position, interface{}) {
-	return e(m)
+func (self Matcher) Match(m Position) (Position, interface{}) {
+	return self(m)
 }
 
 /*
@@ -53,10 +53,20 @@ var Eof = Matcher(func(m Position) (Position, interface{}) {
 type Terminal int
 
 func (self Terminal) Match(m Position) (Position, interface{}) {
-	if m.Id() == self {
+	if m.Id() == int(self) {
 		return m.Next(), m.Data()
 	}
 	return m.Fail(), nil
+}
+
+func QualifiedTerminal(t Terminal, s string) Expr {
+	return Matcher(func (m Position) (Position, interface{}) {
+		p, d := t.Match(m)
+		if !p.Failed() && m.Data().(string) == s {
+			return p, d
+		}
+		return m.Fail(), nil
+	})
 }
 
 /*
@@ -65,35 +75,36 @@ func (self Terminal) Match(m Position) (Position, interface{}) {
 
 type And []Expr
 
-func (e And) Match(m Position) (Position, interface{}) {
-	res := make([]interface{}, len(e))
-	for i, x := range e {
+func (self And) Match(m Position) (Position, interface{}) {
+	res := make([]interface{}, len(self))
+	for i, x := range self {
 		if m.Failed() {
 			return m, nil
 		}
-		m, res[i] = x.Match(cur)
+		m, res[i] = x.Match(m)
 	}
 	return m, res
 }
 
 type Or []Expr
 
-func (e Or) Match(m Position) (cur Position, res interface{}) {
-	for _, x := range e {
-		cur, res = x.Match(m)
-		if !cur.Failed() {
-			return
+func (self Or) Match(m Position) (Position, interface{}) {
+	for _, e := range self {
+		n, res := e.(Expr).Match(m)
+		if !n.Failed() {
+			return n, res
 		}
 	}
-	return
+	return m.Fail(), nil
 }
 
 type ExtensibleExpr struct {
 	es *vector.Vector
+	e Or
 }
 
 func Extensible () *ExtensibleExpr {
-	return &ExtensibleExpr { new(vector.Vector) }
+	return &ExtensibleExpr { new(vector.Vector), Or {} }
 }
 
 func (self *ExtensibleExpr) Add(e Expr) {
@@ -101,13 +112,14 @@ func (self *ExtensibleExpr) Add(e Expr) {
 }
 
 func (self *ExtensibleExpr) Match(m Position) (Position, interface{}) {
-	for _, e := range self.es.Data() {
-		n, res := e.(Expr).Match(m)
-		if !n.Failed() {
-			return n, res
+	if len(self.e) != self.es.Len() {
+		newe := make(Or, self.es.Len())
+		for i, e := range self.es.Data() {
+			newe[i] = e.(Expr)
 		}
+		self.e = newe
 	}
-	return m.Fail(), nil
+	return self.e.Match(m)
 }
 
 /*
@@ -119,13 +131,13 @@ type quantifiedExpr struct {
 	min, max int
 }
 
-func (e *quantifiedExpr) Match(m Position) (Position, interface{}) {
+func (self *quantifiedExpr) Match(m Position) (Position, interface{}) {
 	var item interface{}
 	cur := m
-	res := new(v.Vector)
+	res := new(vector.Vector)
 	// guaranteed minimum
-	for i := 0; i < e.min; i++ {
-		cur, item = e.e.Match(cur)
+	for i := 0; i < self.min; i++ {
+		cur, item = self.e.Match(cur)
 		if cur.Failed() {
 			return cur, nil
 		}
@@ -133,10 +145,10 @@ func (e *quantifiedExpr) Match(m Position) (Position, interface{}) {
 	}
 	last := cur
 	// optional (up to a maximum)
-	for i := e.min; e.max == -1 || i < e.max; i++ {
-		cur, item = e.e.Match(last)
+	for i := self.min; self.max == -1 || i < self.max; i++ {
+		cur, item = self.e.Match(last)
 		if cur.Failed() {
-			return last, res
+			return last, res.Data()
 		}
 		res.Push(item)
 		last = cur

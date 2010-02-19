@@ -3,13 +3,12 @@ package lexer
 import (
 	"os"
 	"container/vector"
-	"strings"
 	"./errors"
 )
 
-type Metachars map[int] string
+type RegexSet map[int] string
 
-var defaultMeta = Metachars {
+var defaultMeta = RegexSet {
 	'w': "(\\a|\\d|_)",
 	's': "[ \t\n\r]",
 	'a': "[a-zA-Z]",
@@ -20,48 +19,46 @@ var defaultMeta = Metachars {
 	'D': "[^0-9]",
 }
 
-func (self *Lexer) Regex(re string, m Metachars) (*BasicState, os.Error) {
+func (self *Lexer) Regex(re string, m RegexSet) (*BasicState, os.Error) {
 	return AddRegex(self.root, re, m)
 }
 
-func (self *Lexer) ForceRegex(re string, m Metachars) *BasicState {
+func (self *Lexer) ForceRegex(re string, m RegexSet) *BasicState {
 	res, err := self.Regex(re, m)
 	errors.Fatal(err)
 	return res
 }
 
-func (self *Lexer) Regexes(start int, m Metachars, res []string) {
-	for i, x := range res {
-		self.ForceRegex(x, m).SetFinal(start + i)
+func (self *Lexer) Regexes(m, regexes RegexSet) {
+	for i, x := range regexes {
+		self.ForceRegex(x, m).SetFinal(i)
 	}
 }
 
 type Regex struct {
-	l, lm *Lexer
+	l *Lexer
 }
 
-func NewRegex(re string, m Metachars) *Regex {
-	l, lm := New(), New()
+func NewRegex(re string, m RegexSet) *Regex {
+	l := New()
 	// build on exising abstractions
 	l.ForceRegex(re, m).SetFinal(0)
-	lm.ForceRegex(re, m).SetFinal(0)
-	lm.ForceRegex(".", nil).SetFinal(1)
-	return &Regex { l, lm }
+	l.ForceRegex(".", nil).SetFinal(1)
+	return &Regex { l }
 }
 
 func (self *Regex) Match(s string) bool {
-	src := strings.Runes(s)
 	l := self.l
-	l.Start(src)
+	l.StartString(s)
 	if l.Next() == 0 {
-		return self.l.Len() == len(src)
+		return self.l.Len() == len(s)
 	}
 	return false
 }
 
 func (self *Regex) Matches(s string) []string {
 	res := new(vector.StringVector)
-	l := self.lm
+	l := self.l
 	l.StartString(s)
 	for !l.Eof() {
 		if l.Next() == 0 {
@@ -85,7 +82,7 @@ type regexPos struct {
 	start, end *BasicState
 }
 
-func AddRegex(start *BasicState, re string, m Metachars) (*BasicState, os.Error) {
+func AddRegex(start *BasicState, re string, m RegexSet) (*BasicState, os.Error) {
 	if m == nil {
 		m = defaultMeta
 	}
@@ -130,6 +127,10 @@ func AddRegex(start *BasicState, re string, m Metachars) (*BasicState, os.Error)
 	for _, c := range re {
 		if esc {
 			esc = false
+			if cs {
+				setstr += string(c)
+				continue
+			}
 			// check out the metachar action
 			if meta, ok := m[c]; ok {
 				move()
@@ -144,8 +145,20 @@ func AddRegex(start *BasicState, re string, m Metachars) (*BasicState, os.Error)
 			// nothing going on? well you escaped it for a reason
 			goto add
 		}
-		if cs && c != ']' {
-			setstr += string(c)
+		if cs {
+			if c == '\\' {
+				esc = true
+			} else if c == ']' {
+				chars, err := Charset(setstr, end)
+				if err != nil {
+					return nil, err
+				}
+				start.AddEmptyTransition(chars)
+				cs = false
+				expr = true
+			} else {
+				setstr += string(c)
+			}
 			continue
 		}
 		switch c {
@@ -161,13 +174,6 @@ func AddRegex(start *BasicState, re string, m Metachars) (*BasicState, os.Error)
 				if !cs {
 					return nil, os.ErrorString("trying to close unopened charset")
 				}
-				chars, err := Charset(setstr, end)
-				if err != nil {
-					return nil, err
-				}
-				start.AddEmptyTransition(chars)
-				cs = false
-				expr = true
 			// grouping
 			case '(':
 				move()
