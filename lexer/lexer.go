@@ -65,10 +65,12 @@ type finishState struct {
 	id, pos int
 }
 
-func finished(set []State, pos int, fin *vector.Vector) {
+func finished(set []State, pos int, fin []int) {
 	for _, x := range set {
-		if f := x.Final(); f != FAIL {
-			fin.Push(&finishState { f, pos })
+		f := x.Final()
+		if f != FAIL && (pos > fin[1] || (pos == fin[1] && f < fin[0])) {
+			fin[0] = f
+			fin[1] = pos
 		}
 	}
 }
@@ -84,8 +86,8 @@ const (
 type Lexer struct {
 	root *BasicState
 	src *bufio.Reader
-	past *vector.IntVector
-	pos, startPos, buf int
+	buf *vector.IntVector
+	pos, startPos int
 	eof bool
 }
 
@@ -101,8 +103,7 @@ func (self *Lexer) Root() *BasicState {
 
 func (self *Lexer) Start(src io.Reader) {
 	self.src = bufio.NewReader(src)
-	self.past = new(vector.IntVector)
-	self.buf = 0
+	self.buf = new(vector.IntVector)
 	self.pos = 0
 }
 
@@ -110,8 +111,8 @@ func (self *Lexer) StartString(src string) {
 	self.Start(strings.NewReader(src))
 }
 
-func (self *Lexer) current() int {
-	if self.buf == 0 {
+func (self *Lexer) get(pos int) int {
+	for pos >= self.buf.Len() {
 		c, _, err := self.src.ReadRune()
 		if err != nil {
 			if err == os.EOF {
@@ -120,59 +121,50 @@ func (self *Lexer) current() int {
 			self.src = nil
 			return FAIL
 		}
-		self.past.Push(c)
-		self.buf = c
-		return c
+		self.buf.Push(c)
 	}
-	return self.buf
+	return self.buf.At(pos)
 }
 
 func (self *Lexer) Next() int {
-	if self.src == nil {
-		return FAIL
-	}
 	if self.eof {
 		return EOF
 	}
-	pos := self.pos
-	self.startPos = pos
-	this := []State { self.root }
-	fin := new(vector.Vector)
-	for {
-		// follow the empty transitions
-		this = close(this)
-		// check for finish states
-		finished(this, pos, fin)
-		// try to move
-		c := self.current()
-		if c == FAIL { break }
-		next := move(this, c)
-		if len(next) == 0 {
-			break
-		}
-		// consume a char
-		self.buf = 0
-		pos++
-		// proceed to the next state set
-		this = next
+	if self.src == nil {
+		return FAIL
 	}
-	res := FAIL
-	for m := range fin.Iter() {
-		match := m.(*finishState)
-		if match.pos > self.pos ||
-		  (match.pos == self.pos && match.id < res) {
-			res = match.id
-			self.pos = match.pos
+	fin := []int { FAIL, -1 }
+	{
+		pos := self.pos
+		self.startPos = pos
+		this := []State { self.root }
+		for {
+			// follow the empty transitions
+			this = close(this)
+			// check for finish states
+			finished(this, pos, fin)
+			// try to move
+			c := self.get(pos)
+			if c == FAIL { break }
+			next := move(this, c)
+			if len(next) == 0 { break }
+			// consume a char
+			pos ++
+			// proceed to the next state set
+			this = next
 		}
 	}
-	return res
+	if fin[0] != FAIL {
+		self.pos = fin[1]
+	}
+	return fin[0]
 }
 
 func (self *Lexer) Eof() bool {
 	return self.eof
 }
 
-func (self *Lexer) Position() int {
+func (self *Lexer) Pos() int {
 	return self.startPos
 }
 
@@ -181,7 +173,7 @@ func (self *Lexer) Len() int {
 }
 
 func (self *Lexer) Data() []int {
-	return self.past.Data()[self.startPos:self.pos]
+	return self.buf.Slice(self.startPos, self.pos).Data()
 }
 
 func (self *Lexer) String() string {

@@ -95,6 +95,7 @@ func (self *eofObj) Id() int {
 	return -1
 }
 
+// connecting to the lexer library
 type lexPos struct {
 	PosDefaults
 	l *lexer.Lexer
@@ -127,7 +128,7 @@ func (self *lexPos) Next() Position {
 	next := new(lexPos)
 	next.l = self.l
 	next.pass = self.pass
-	next.PosDefaults.pos = self.l.Position()
+	next.PosDefaults.pos = self.l.Pos()
 	next.id = n
 	next.data = self.l.String()
 	self.next = next

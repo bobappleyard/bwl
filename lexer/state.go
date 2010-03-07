@@ -148,3 +148,4 @@ func (self *csState) Move(c int) []State {
 	return []State {}
 }
 
+

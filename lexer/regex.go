@@ -3,6 +3,7 @@ package lexer
 import (
 	"os"
 	"container/vector"
+	"strings"
 	"./errors"
 )
 
@@ -20,7 +21,7 @@ var defaultMeta = RegexSet {
 }
 
 func (self *Lexer) Regex(re string, m RegexSet) (*BasicState, os.Error) {
-	return AddRegex(self.root, re, m)
+	return self.root.AddRegex(re, m)
 }
 
 func (self *Lexer) ForceRegex(re string, m RegexSet) *BasicState {
@@ -41,16 +42,14 @@ type Regex struct {
 
 func NewRegex(re string, m RegexSet) *Regex {
 	l := New()
-	// build on exising abstractions
 	l.ForceRegex(re, m).SetFinal(0)
 	l.ForceRegex(".", nil).SetFinal(1)
 	return &Regex { l }
 }
 
 func (self *Regex) Match(s string) bool {
-	l := self.l
-	l.StartString(s)
-	if l.Next() == 0 {
+	self.l.StartString(s)
+	if self.l.Next() == 0 {
 		return self.l.Len() == len(s)
 	}
 	return false
@@ -58,14 +57,28 @@ func (self *Regex) Match(s string) bool {
 
 func (self *Regex) Matches(s string) []string {
 	res := new(vector.StringVector)
-	l := self.l
-	l.StartString(s)
-	for !l.Eof() {
-		if l.Next() == 0 {
-			res.Push(l.String())
+	self.l.StartString(s)
+	for !self.l.Eof() {
+		if self.l.Next() == 0 {
+			res.Push(self.l.String())
 		}
 	}
 	return res.Data()
+}
+
+func (self *Regex) Replace(s string, f func(string) string) string {
+	res := new(vector.StringVector)
+	last := 0
+	self.l.StartString(s)
+	for !self.l.Eof() {
+		if self.l.Next() == 0 {
+			res.Push(s[last:self.l.Pos()])
+			res.Push(f(self.l.String()))
+			last = self.l.Pos() + self.l.Len()
+		}
+	}
+	res.Push(s[last:])
+	return strings.Join(res.Data(), "")
 }
 
 func Match(re, s string) bool {
@@ -78,17 +91,23 @@ func Matches(re, s string) []string {
 	return expr.Matches(s)
 }
 
+func Replace(re, s string, f func(string) string) string {
+	expr := NewRegex(re, nil)
+	return expr.Replace(s, f)
+}
+
 type regexPos struct {
 	start, end *BasicState
 }
 
-func AddRegex(start *BasicState, re string, m RegexSet) (*BasicState, os.Error) {
+func (self *BasicState) AddRegex(re string, m RegexSet) (*BasicState, os.Error) {
 	if m == nil {
 		m = defaultMeta
 	}
 	// this is just the sort of horror show that lexical analysis avoids
 
 	// stack machine
+	start := self
 	end := NewState()
 	stack := new(vector.Vector)
 	
@@ -134,7 +153,7 @@ func AddRegex(start *BasicState, re string, m RegexSet) (*BasicState, os.Error) 
 			// check out the metachar action
 			if meta, ok := m[c]; ok {
 				move()
-				s, err := AddRegex(start, meta, m)
+				s, err := start.AddRegex(meta, m)
 				if err != nil {
 					return nil, err
 				}
@@ -225,17 +244,10 @@ func AddRegex(start *BasicState, re string, m RegexSet) (*BasicState, os.Error) 
 		continue
 	}
 	
-	if cs {
-		return nil, os.ErrorString("unclosed charset")
-	}
-	
-	if esc {
-		return nil, os.ErrorString("invalid escape sequence")
-	}
-	
-	if stack.Len() > 1 {
-		return nil, os.ErrorString("unclosed subexpr")
-	}
+	// some final consistency checks
+	if cs { return nil, os.ErrorString("unclosed charset") }
+	if esc { return nil, os.ErrorString("invalid escape sequence") }
+	if stack.Len() > 1 { return nil, os.ErrorString("unclosed subexpr") }
 	
 	// close the implicit brackets
 	pop()
