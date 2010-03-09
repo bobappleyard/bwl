@@ -2,6 +2,22 @@ This repository collects some helper libraries for constructing applications in 
 
 They're all licensed under GPLv3 or above. Nyah!
 
+Compiling etc
+-------------
+
+You'll need [Gobuild](http://code.google.com/p/gobuild/) for this. In the project root, run
+
+    $ gobuild -lib
+
+This will create all the necessary .a files in the directory you are in. From here, you can check out the example programs.
+
+    $ cd examples
+    $ gobuild -a
+    
+This will work if gobuild accepts the patch I just sent to the maintainer. Fingers crossed. Until then, linking the directories containing all the source files will do it.
+
+From there, you can go on to try out three demo programs. `lex` creates a lexical analyser where each token type is specified by a regular expression passed in as an argument, and executes this analyser against stdin, printing a report to stdout. `reg` takes a single, regular expression, argument, and then prints all occurences of matches in stdin to stdout. `arc` creates a webserver, listening on port 12345, that has a page, /said, that performs the Arc Challenge. Except it doesn't at the moment, and I don't know why!
+
 actor -- A Simple Serialisation Mechanism
 =========================================
 

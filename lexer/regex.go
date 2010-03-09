@@ -3,6 +3,7 @@ package lexer
 import (
 	"os"
 	"container/vector"
+	"bytes"
 	"strings"
 	"./errors"
 )
@@ -68,16 +69,17 @@ func (self *Regex) Matches(s string) []string {
 
 func (self *Regex) Replace(s string, f func(string) string) string {
 	res := new(vector.StringVector)
+	buf := bytes.Runes([]byte(s))
 	last := 0
 	self.l.StartString(s)
 	for !self.l.Eof() {
 		if self.l.Next() == 0 {
-			res.Push(s[last:self.l.Pos()])
+			res.Push(string(buf[last:self.l.Pos()]))
 			res.Push(f(self.l.String()))
 			last = self.l.Pos() + self.l.Len()
 		}
 	}
-	res.Push(s[last:])
+	res.Push(string(buf[last:]))
 	return strings.Join(res.Data(), "")
 }
 

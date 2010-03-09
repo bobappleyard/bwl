@@ -10,86 +10,105 @@ import (
 	"./actor"
 )
 
-// API
-var setCache, addHandler func(interface{}) interface{} 
+const CACHE_DEFAULT = 1024
+
+type AnonymousPageServer struct {
+	a *actor.Actor
+	limit int
+	prefix string
+	items *list.List
+	paths map[int64] http.Handler
+}
+
+func New(prefix string) *AnonymousPageServer {
+	return &AnonymousPageServer {
+		actor.New(),
+		CACHE_DEFAULT,
+		"/" + prefix + "/",
+		list.New(),
+		make(map[int64] http.Handler),
+	}
+}
 
 // Changes the maximum number of items in the handler cache.
-func SetCacheSize(newSize int) {
-	setCache(newSize)
+func (self *AnonymousPageServer) SetCacheSize(newSize int) {
+	self.a.Schedule(func() interface{} {
+		self.limit = newSize
+		return nil
+	})
 }
 
 // Attaches a handler to a page, and returns a link to it.
-func Handle(h http.Handler) string {
-	return addHandler(h).(string)
-}
-
-// A shortcut for function pages.
-func Create(h func(c *http.Conn, r *http.Request)) string {
-	return Handle(http.HandlerFunc(h))
-}
-
-// implementation
-
-const CACHE_DEFAULT = 1024
-
-func init() {
-	// init the cache
-	cache_limit := CACHE_DEFAULT
-	items := list.New()
-	paths := make(map[int64] http.Handler)
-	// start the server
-	a := actor.New()
-	// register some message handlers
-	setCache = a.Add(func (data interface{}) {
-		cache_limit = data.(int)
-	})
-	addHandler = a.Add(func (data interface{}) interface{} {
-		// remove old items from the cache
-		for items.Len() >= cache_limit {
-			e := items.Back()
-			paths[e.Value.(int64)] = nil, false
-			items.Remove(e)
+func (self *AnonymousPageServer) Handle(h http.Handler) string {
+	return self.a.Schedule(func() interface{} {
+		// clear cache
+		for self.items.Len() >= self.limit {
+			e := self.items.Back()
+			self.paths[e.Value.(int64)] = nil, false
+			self.items.Remove(e)
 		}
 		// generate a key
 		var key int64
 		done := false
 		for !done {
 			key = rand.Int63()
-			if _, ok := paths[key]; !ok {
+			if _, ok := self.paths[key]; !ok {
 				done = true
 			}
 		}
 		// add new item
-		items.PushFront(key)
-		paths[key] = data.(http.Handler)
+		self.items.PushFront(key)
+		self.paths[key] = h
 		// and return the path
-		return "/apage/" + strconv.Itoa64(key)
-	})
-	serveFail := func(c *http.Conn, r *http.Request) {
-		io.WriteString(c, "error while trying to serve page")
-	}
-	servePage := a.Add(func (data interface{}) interface{} {
-		page, ok := paths[data.(int64)]
+		return self.prefix + strconv.Itoa64(key)
+	}).(string)
+}
+
+// A shortcut for function pages (which should be most of them)
+func (self *AnonymousPageServer) Create(h func(c *http.Conn, r *http.Request)) string {
+	return self.Handle(http.HandlerFunc(h))
+}
+
+func (self *AnonymousPageServer) getPage(id int64) http.Handler {
+	return self.a.Schedule(func() interface{} {
+		page, ok := self.paths[id]
 		if !ok {
-			return http.HandlerFunc(serveFail)
+			return http.HandlerFunc(func(c *http.Conn, r *http.Request) {
+				c.WriteHeader(http.StatusNotFound)
+				io.WriteString(c, "page is not in cache")
+			})
 		}
 		return page
-	})
-	
-	// connect all this to the http library
-	http.Handle("/apage/", http.HandlerFunc(func (c *http.Conn, r *http.Request) {
+	}).(http.Handler)
+}
+
+func (self *AnonymousPageServer) Attach(s *http.ServeMux) {
+	s.Handle(self.prefix, http.HandlerFunc(func (c *http.Conn, r *http.Request) {
 		_, name := path.Split(r.URL.Path)
 		id, err := strconv.Atoi64(name)
 		if err != nil {
-			serveFail(c, r)
+			c.WriteHeader(http.StatusBadRequest)
+			io.WriteString(c, "invalid page id")
 		} else {
-			h := servePage(id).(http.Handler)
-			h.ServeHTTP(c, r)
+			self.getPage(id).ServeHTTP(c, r)
 		}
 	}))
 }
 
+var server = func() *AnonymousPageServer {
+	res := New("apage")
+	res.Attach(http.DefaultServeMux)
+	return res
+}()
 
+func SetCacheSize(newSize int) {
+	server.SetCacheSize(newSize)
+}
 
+func Handle(h http.Handler) string {
+	return server.Handle(h)
+}
 
-
+func Create(h func(c *http.Conn, r *http.Request)) string {
+	return server.Create(h)
+}
