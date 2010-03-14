@@ -16,23 +16,48 @@ This will create all the necessary .a files in the directory you are in. From he
     
 This will work if gobuild accepts the patch I just sent to the maintainer. Fingers crossed. Until then, linking the directories containing all the source files will do it.
 
-From there, you can go on to try out three demo programs. `lex` creates a lexical analyser where each token type is specified by a regular expression passed in as an argument, and executes this analyser against stdin, printing a report to stdout. `reg` takes a single, regular expression, argument, and then prints all occurences of matches in stdin to stdout. `arc` creates a webserver, listening on port 12345, that has a page, /said, that performs the Arc Challenge. Except it doesn't at the moment, and I don't know why!
+You can then go on to try out three demo programs. `lex` creates a lexical analyser where each token type is specified by a regular expression passed in as an argument, and executes this analyser against stdin, printing a report to stdout. `reg` takes a single, regular expression, argument, and then prints all occurences of matches in stdin to stdout. `arc` creates a webserver, listening on port 12345, that has a page, /said, that performs the Arc Challenge. Except it doesn't at the moment, and I don't know why!
 
 actor -- A Simple Serialisation Mechanism
 =========================================
 
-This library provides the Actor type, which is one way of performing concurrent calculations. It groups together a set of functions. These functions can be invoked from any goroutine, and the invocations are serialised into a single goroutine. This could be used to simplify access to a resource, but it also forms the basis of an interesting way of composing concurrent applications, the "actor model."
+The actor package presents a way of making concurrent access to objects simpler. It receives thunks (functions that take no arguments, and can return anything), and then calls them, in sequence, all in a single Goroutine. This easily allows access from many different Goroutines to be serialised. 
 
-Create this goroutine and the associated management by calling actor.New(). Then you call Add() on the resulting object to have a function you pass in come under the purview of the Actor. Add returns the function you should call to get the Actor to do the specified work.
+Create an actor with `actor.New()`. Then use `Actor.Schedule(thk)` to push a thunk onto the queue. By default, the caller of `Schedule` will wait for the thunk to finish, to get some return value. If this is not desired (and there are many arguments against it), then fire off a Goroutine and forget about it.
 
-There are two types of function that an Actor manages:
+This library was more elaborate in a previous life, but I decided to pare it down in order that it play nice with Go's OOP-ish stuff. It's now dashed simple, and also quite lovely. I want to hug it sometimes!
 
-    func(interface{})
-    func(interface{}) interface{}
+Example
+-------
+
+This uses an actor to manage access to a very simple bank database. Both synchronous and asynchronous uses of the Actor API are presented.
+
+    type Bank struct {
+        a *actor.Actor
+        // no overdraft
+        accounts map[string] uint
+    }
     
-The first typed will be called asynchronously (this is to be preferred). The Actor will return nil immediately. The second type, when it is called, will cause the goroutine making the call to wait for the result to be produced. 
-
-For an example of this library in use, check out the apage server.
+    func (self *Bank) Deposit(name string, val uint) {
+        go self.a.Schedule(func() interface{} {
+            balance, ok := self.accounts[name]
+            if !ok { balance = 0 }
+            balance += val
+            self.accounts[name] = balance
+            return nil
+        })
+    }
+    
+    func (self *Bank) Withdraw(name string, val uint) uint {
+        return self.a.Schedule(func() interface{} {
+            balance, ok := self.accounts[name]
+            if !ok { balance = 0 }
+            if balance < val { val = balance }
+            balance -= val
+            self.accounts[name] = balance
+            return val
+        }).(int)
+    }   
 
 apage -- Anonymous Pages
 ========================

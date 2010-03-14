@@ -9,13 +9,13 @@ import (
 /* States */
 
 // Encapsulates the actions of the Lexer in terms of states and transitions.
-// Move chooses a transition to follow after consuming some input. 
+// Move chooses a transition to follow after consuming some input.
+// Close follows all transitions that require no input.
+// Final returns -1 if it is not a final state. If it is, Final returns the 
+// identifier associated with the state.
 type State interface {
-	// Accept a character, and say what states can be reached given that character.
 	Move(c int) []State
-	// Move without consuming any input.
 	Close() []State
-	// Is the state a final state? If so return its final marker. Otherwise -1.
 	Final() int
 }
 
@@ -109,6 +109,9 @@ func Charset(spec string, next State) (State, os.Error) {
 	start := 0
 	inrange, inv := false, false
 	chars := ""
+	res := new(csState)
+	res.SetNext(next)
+	if spec == "" { return res, nil } // this will allow nothing past
 	if spec[0] == '^' {
 		inv = true
 		spec = spec[1:]
@@ -130,8 +133,6 @@ func Charset(spec string, next State) (State, os.Error) {
 				start = x
 		}
 	}
-	res := new(csState)
-	res.SetNext(next)
 	res.chars = chars
 	res.inv = inv
 	return res, nil

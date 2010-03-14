@@ -51,10 +51,6 @@ func (self *PosDefaults) Data() interface{} {
 	return nil
 }
 
-type eofObj struct {
-	PosDefaults
-}
-
 // this is used by the default implementation to implement failures
 type failure struct {
 	PosDefaults
@@ -77,10 +73,14 @@ func (self *failure) Id() int {
 }
 
 func (self *failure) String() string {
-	return string(self.pos)
+	return string(self.PosDefaults.pos)
 }
 
 // A position object representing the end of input
+type eofObj struct {
+	PosDefaults
+}
+
 var EofObject = new(eofObj)
 
 func (self *eofObj) Next() Position {

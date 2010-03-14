@@ -11,14 +11,26 @@ import (
 type RegexSet map[int] string
 
 var defaultMeta = RegexSet {
-	'w': "(\\a|\\d|_)",
-	's': "[ \t\n\r]",
-	'a': "[a-zA-Z]",
-	'd': "[0-9]",
-	'W': "[^a-zA-Z0-9_]",
-	'S': "[^ \t\n\r]",
-	'A': "[^a-zA-Z]",
-	'D': "[^0-9]",
+	'w': "a-zA-Z0-9_",
+	's': " \t\n\r",
+	'a': "a-zA-Z",
+	'd': "0-9",
+	'W': "^a-zA-Z0-9_",
+	'S': "^ \t\n\r",
+	'A': "^a-zA-Z",
+	'D': "^0-9",
+}
+
+func ExtendSet(base, ext RegexSet) RegexSet {
+	res := make(RegexSet)
+	if base == nil { base = defaultMeta }
+	for k, v := range base {
+		res[k] = v
+	}
+	for k, v := range ext {
+		res[k] = v
+	}
+	return res
 }
 
 func (self *Lexer) Regex(re string, m RegexSet) (*BasicState, os.Error) {
@@ -112,14 +124,10 @@ func (self *BasicState) AddRegex(re string, m RegexSet) (*BasicState, os.Error) 
 	start := self
 	end := NewState()
 	stack := new(vector.Vector)
-	
-	// is it ok for a modifier to appear?
-	expr := false
-	// has the escape character just appeared?
-	esc := false
-	// charset stuff
+
+	// state flags
+	expr, esc, cs := false, false, false
 	setstr := ""
-	cs := false
 
 	// go into a subexpression
 	push := func() {
@@ -146,8 +154,10 @@ func (self *BasicState) AddRegex(re string, m RegexSet) (*BasicState, os.Error) 
 	
 	// parse the expression
 	for _, c := range re {
+		// escaped characters
 		if esc {
 			esc = false
+			// inside a charset jobby
 			if cs {
 				setstr += string(c)
 				continue
@@ -155,17 +165,18 @@ func (self *BasicState) AddRegex(re string, m RegexSet) (*BasicState, os.Error) 
 			// check out the metachar action
 			if meta, ok := m[c]; ok {
 				move()
-				s, err := start.AddRegex(meta, m)
+				chars, err := Charset(meta, end)
 				if err != nil {
 					return nil, err
 				}
-				s.AddEmptyTransition(end)
+				start.AddEmptyTransition(chars)
 				expr = true
 				continue
 			}
-			// nothing going on? well you escaped it for a reason
+			// nothing else going on? well you escaped it for a reason
 			goto add
 		}
+		// charsets
 		if cs {
 			if c == '\\' {
 				esc = true
@@ -175,6 +186,7 @@ func (self *BasicState) AddRegex(re string, m RegexSet) (*BasicState, os.Error) 
 					return nil, err
 				}
 				start.AddEmptyTransition(chars)
+				setstr = ""
 				cs = false
 				expr = true
 			} else {
@@ -182,6 +194,7 @@ func (self *BasicState) AddRegex(re string, m RegexSet) (*BasicState, os.Error) 
 			}
 			continue
 		}
+		// everything else
 		switch c {
 			// charsets
 			case '.':

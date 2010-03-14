@@ -15,13 +15,9 @@ type Actor struct {
 func New() *Actor {
 	res := &Actor { make(chan *msg, 20) }
 	go func() {
-		for {
-			m := <-res.send
-			r := m.thk()
-			if m.recv != nil {
-				m.recv <-r
-				close(m.recv)
-			}
+		for m := range res.send {
+			m.recv <-m.thk()
+			close(m.recv)
 		}
 	}()
 	return res
