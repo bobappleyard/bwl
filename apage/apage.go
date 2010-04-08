@@ -7,7 +7,8 @@ import (
 	"rand"
 	"strconv"
 	"path"
-	"./actor"
+
+	"github.com/bobappleyard/bwl/actor"
 )
 
 const CACHE_DEFAULT = 1024

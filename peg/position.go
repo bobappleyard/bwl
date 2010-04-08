@@ -2,7 +2,8 @@ package peg
 
 import (
 	"io"
-	"./lexer"
+
+	"github.com/bobappleyard/bwl/lexer"
 )
 
 /*

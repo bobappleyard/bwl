@@ -5,7 +5,8 @@ import (
 	"container/vector"
 	"bytes"
 	"strings"
-	"./errors"
+
+	"github.com/bobappleyard/bwl/errors"
 )
 
 type RegexSet map[int] string
