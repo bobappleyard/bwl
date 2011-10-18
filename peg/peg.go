@@ -114,7 +114,7 @@ func (self *ExtensibleExpr) Add(e Expr) {
 func (self *ExtensibleExpr) Match(m Position) (Position, interface{}) {
 	if len(self.e) != self.es.Len() {
 		newe := make(Or, self.es.Len())
-		for i, e := range self.es.Data() {
+		for i, e := range *self.es.Slice(0,self.es.Len()) {
 			newe[i] = e.(Expr)
 		}
 		self.e = newe
@@ -148,12 +148,12 @@ func (self *quantifiedExpr) Match(m Position) (Position, interface{}) {
 	for i := self.min; self.max == -1 || i < self.max; i++ {
 		cur, item = self.e.Match(last)
 		if cur.Failed() {
-			return last, res.Data()
+			return last, []interface{}(*res.Slice(0,res.Len()))
 		}
 		res.Push(item)
 		last = cur
 	}
-	return cur, res.Data()
+	return cur, []interface{}(*res.Slice(0,res.Len()))
 }
 
 func Quantify(e Expr, min, max int) Expr {
