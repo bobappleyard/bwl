@@ -77,7 +77,7 @@ func (self *Regex) Matches(s string) []string {
 			res.Push(self.l.String())
 		}
 	}
-	return res.Data()
+	return []string(*res.Slice(0,res.Len()))
 }
 
 func (self *Regex) Replace(s string, f func(string) string) string {
@@ -93,7 +93,7 @@ func (self *Regex) Replace(s string, f func(string) string) string {
 		}
 	}
 	res.Push(string(buf[last:]))
-	return strings.Join(res.Data(), "")
+	return strings.Join([]string(*res.Slice(0,res.Len())), "")
 }
 
 func Match(re, s string) bool {

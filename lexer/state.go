@@ -45,7 +45,7 @@ func (self *BasicState) Move(c int) []State {
 
 func (self *BasicState) Close() []State {
 	res := make([]State, self.empty.Len())
-	for i, x := range self.empty.Data() {
+	for i, x := range *self.empty.Slice(0,self.empty.Len()) {
 		res[i] = x.(State)
 	}
 	return res
