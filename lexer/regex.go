@@ -207,7 +207,7 @@ func (self *BasicState) AddRegex(re string, m RegexSet) (*BasicState, os.Error) 
 				cs = true
 			case ']':
 				if !cs {
-					return nil, os.ErrorString("trying to close unopened charset")
+					return nil, os.NewError("trying to close unopened charset")
 				}
 			// grouping
 			case '(':
@@ -216,7 +216,7 @@ func (self *BasicState) AddRegex(re string, m RegexSet) (*BasicState, os.Error) 
 				expr = false
 			case ')':
 				if stack.Len() <= 1 {
-					return nil, os.ErrorString("trying to close unopened subexpr")
+					return nil, os.NewError("trying to close unopened subexpr")
 				}
 				pop()
 				expr = true
@@ -248,7 +248,7 @@ func (self *BasicState) AddRegex(re string, m RegexSet) (*BasicState, os.Error) 
 		// make sure the modifier modified something
 	check:
 		if !expr { 
-			return nil, os.ErrorString("nothing to modify") 
+			return nil, os.NewError("nothing to modify") 
 		}
 		expr = false
 		continue
@@ -261,9 +261,9 @@ func (self *BasicState) AddRegex(re string, m RegexSet) (*BasicState, os.Error) 
 	}
 	
 	// some final consistency checks
-	if cs { return nil, os.ErrorString("unclosed charset") }
-	if esc { return nil, os.ErrorString("invalid escape sequence") }
-	if stack.Len() > 1 { return nil, os.ErrorString("unclosed subexpr") }
+	if cs { return nil, os.NewError("unclosed charset") }
+	if esc { return nil, os.NewError("invalid escape sequence") }
+	if stack.Len() > 1 { return nil, os.NewError("unclosed subexpr") }
 	
 	// close the implicit brackets
 	pop()

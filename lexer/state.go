@@ -122,7 +122,7 @@ func Charset(spec string, next State) (State, os.Error) {
 				inrange = true
 			case inrange:
 				if start == 0 || x <= start {
-					return nil, os.ErrorString("invalid range specification")
+					return nil, os.NewError("invalid range specification")
 				}
 				for i := start + 1; i <= x; i++ {
 					chars += string(i)
