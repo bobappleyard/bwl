@@ -173,7 +173,7 @@ func (self *Lexer) Len() int {
 }
 
 func (self *Lexer) Data() []int {
-	return self.buf.Slice(self.startPos, self.pos).Data()
+	return []int(*self.buf.Slice(self.startPos, self.pos))
 }
 
 func (self *Lexer) String() string {
