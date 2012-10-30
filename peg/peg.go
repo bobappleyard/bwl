@@ -11,7 +11,7 @@ import (
 /*
 	An expression interface
 	
-	Expresssions match a position in the source, or not. The Match method
+	Expressions match a position in the source, or not. The Match method
 	should return the position in the input just after the end of the region
 	matched, along with the data corresponding to the region matched. This 
 	could be a string of the text region itself, or it could be an object
