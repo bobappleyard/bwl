@@ -158,16 +158,17 @@ const (
 	l.ForceRegex(`[0-9]+(\.[0-9]+)?`).SetFinal(NUMBER)
 	
 	...
-		l.Start(src)
-		switch l.Next() {
-			case IDENT:
-				return NewIdent(l.String()) // do something with the result
-			case NUMBER:
-				...
-		    
-			case -1:
-				// handle failure
-		}
+
+	l.Start(src)
+	switch l.Next() {
+		case IDENT:
+			return NewIdent(l.String()) // do something with the result
+		case NUMBER:
+			...
+	    
+		case -1:
+			// handle failure
+	}
 ```
 
 For some more examples of using the interface, see the regex.go file in the library.
