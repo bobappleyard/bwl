@@ -4,10 +4,6 @@ package peg
 	PEG matching
 */
 
-import (
-	"container/vector"
-)
-
 /*
 	An expression interface
 
@@ -99,24 +95,22 @@ func (self Or) Match(m Position) (Position, interface{}) {
 }
 
 type ExtensibleExpr struct {
-	es *vector.Vector
+	es []Expr
 	e  Or
 }
 
 func Extensible() *ExtensibleExpr {
-	return &ExtensibleExpr{new(vector.Vector), Or{}}
+	return &ExtensibleExpr{make([]Expr, 0), Or{}}
 }
 
 func (self *ExtensibleExpr) Add(e Expr) {
-	self.es.Push(e)
+	self.es = append(self.es, e)
 }
 
 func (self *ExtensibleExpr) Match(m Position) (Position, interface{}) {
-	if len(self.e) != self.es.Len() {
-		newe := make(Or, self.es.Len())
-		for i, e := range *self.es.Slice(0, self.es.Len()) {
-			newe[i] = e.(Expr)
-		}
+	if len(self.e) != len(self.es) {
+		newe := make(Or, len(self.es))
+		copy(newe, self.es)
 		self.e = newe
 	}
 	return self.e.Match(m)
@@ -134,26 +128,26 @@ type quantifiedExpr struct {
 func (self *quantifiedExpr) Match(m Position) (Position, interface{}) {
 	var item interface{}
 	cur := m
-	res := new(vector.Vector)
+	res := []interface{}{}
 	// guaranteed minimum
 	for i := 0; i < self.min; i++ {
 		cur, item = self.e.Match(cur)
 		if cur.Failed() {
 			return cur, nil
 		}
-		res.Push(item)
+		res = append(res, item)
 	}
 	last := cur
 	// optional (up to a maximum)
 	for i := self.min; self.max == -1 || i < self.max; i++ {
 		cur, item = self.e.Match(last)
 		if cur.Failed() {
-			return last, []interface{}(*res.Slice(0, res.Len()))
+			return last, res
 		}
-		res.Push(item)
+		res = append(res, item)
 		last = cur
 	}
-	return cur, []interface{}(*res.Slice(0, res.Len()))
+	return cur, res
 }
 
 func Quantify(e Expr, min, max int) Expr {

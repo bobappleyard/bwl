@@ -2,14 +2,14 @@ package lexer
 
 import (
 	"bytes"
-	"container/vector"
-	"os"
+	"container/list"
+	"errors"
 	"strings"
 
-	"github.com/bobappleyard/bwl/errors"
+	bwlerrors "github.com/bobappleyard/bwl/errors"
 )
 
-type RegexSet map[int]string
+type RegexSet map[rune]string
 
 var defaultMeta = RegexSet{
 	'w': "a-zA-Z0-9_",
@@ -36,19 +36,22 @@ func ExtendSet(base, ext RegexSet) RegexSet {
 	return res
 }
 
-func (self *Lexer) Regex(re string, m RegexSet) (*BasicState, os.Error) {
+func (self *Lexer) Regex(re string, m RegexSet) (*BasicState, error) {
 	return self.root.AddRegex(re, m)
 }
 
 func (self *Lexer) ForceRegex(re string, m RegexSet) *BasicState {
 	res, err := self.Regex(re, m)
-	errors.Fatal(err)
+	if err != nil {
+		println(re, err.Error())
+	}
+	bwlerrors.Fatal(err)
 	return res
 }
 
 func (self *Lexer) Regexes(m, regexes RegexSet) {
 	for i, x := range regexes {
-		self.ForceRegex(x, m).SetFinal(i)
+		self.ForceRegex(x, m).SetFinal(int(i))
 	}
 }
 
@@ -72,30 +75,30 @@ func (self *Regex) Match(s string) bool {
 }
 
 func (self *Regex) Matches(s string) []string {
-	res := new(vector.StringVector)
+	res := make([]string, 0)
 	self.l.StartString(s)
 	for !self.l.Eof() {
 		if self.l.Next() == 0 {
-			res.Push(self.l.String())
+			res = append(res, self.l.String())
 		}
 	}
-	return []string(*res.Slice(0, res.Len()))
+	return res
 }
 
 func (self *Regex) Replace(s string, f func(string) string) string {
-	res := new(vector.StringVector)
+	res := make([]string, 0)
 	buf := bytes.Runes([]byte(s))
 	last := 0
 	self.l.StartString(s)
 	for !self.l.Eof() {
 		if self.l.Next() == 0 {
-			res.Push(string(buf[last:self.l.Pos()]))
-			res.Push(f(self.l.String()))
+			res = append(res, string(buf[last:self.l.Pos()]))
+			res = append(res, f(self.l.String()))
 			last = self.l.Pos() + self.l.Len()
 		}
 	}
-	res.Push(string(buf[last:]))
-	return strings.Join([]string(*res.Slice(0, res.Len())), "")
+	res = append(res, string(buf[last:]))
+	return strings.Join(res, "")
 }
 
 func Match(re, s string) bool {
@@ -117,7 +120,7 @@ type regexPos struct {
 	start, end *BasicState
 }
 
-func (self *BasicState) AddRegex(re string, m RegexSet) (*BasicState, os.Error) {
+func (self *BasicState) AddRegex(re string, m RegexSet) (*BasicState, error) {
 	if m == nil {
 		m = defaultMeta
 	}
@@ -126,7 +129,7 @@ func (self *BasicState) AddRegex(re string, m RegexSet) (*BasicState, os.Error) 
 	// stack machine
 	start := self
 	end := NewState()
-	stack := new(vector.Vector)
+	stack := list.New()
 
 	// state flags
 	expr, esc, cs := false, false, false
@@ -135,13 +138,15 @@ func (self *BasicState) AddRegex(re string, m RegexSet) (*BasicState, os.Error) 
 	// go into a subexpression
 	push := func() {
 		rp := &regexPos{start, end}
-		stack.Push(rp)
+		stack.PushBack(rp)
 		end = NewState()
 		start.AddEmptyTransition(end)
 	}
 	// come out of a subexpression
 	pop := func() {
-		rp := stack.Pop().(*regexPos)
+		v := stack.Back()
+		stack.Remove(v)
+		rp := v.Value.(*regexPos)
 		end.AddEmptyTransition(rp.end)
 		start = rp.start
 		end = rp.end
@@ -209,7 +214,7 @@ func (self *BasicState) AddRegex(re string, m RegexSet) (*BasicState, os.Error) 
 			cs = true
 		case ']':
 			if !cs {
-				return nil, os.NewError("trying to close unopened charset")
+				return nil, errors.New("trying to close unopened charset")
 			}
 		// grouping
 		case '(':
@@ -218,7 +223,7 @@ func (self *BasicState) AddRegex(re string, m RegexSet) (*BasicState, os.Error) 
 			expr = false
 		case ')':
 			if stack.Len() <= 1 {
-				return nil, os.NewError("trying to close unopened subexpr")
+				return nil, errors.New("trying to close unopened subexpr")
 			}
 			pop()
 			expr = true
@@ -250,7 +255,7 @@ func (self *BasicState) AddRegex(re string, m RegexSet) (*BasicState, os.Error) 
 		// make sure the modifier modified something
 	check:
 		if !expr {
-			return nil, os.NewError("nothing to modify")
+			return nil, errors.New("nothing to modify")
 		}
 		expr = false
 		continue
@@ -264,13 +269,13 @@ func (self *BasicState) AddRegex(re string, m RegexSet) (*BasicState, os.Error) 
 
 	// some final consistency checks
 	if cs {
-		return nil, os.NewError("unclosed charset")
+		return nil, errors.New("unclosed charset")
 	}
 	if esc {
-		return nil, os.NewError("invalid escape sequence")
+		return nil, errors.New("invalid escape sequence")
 	}
 	if stack.Len() > 1 {
-		return nil, os.NewError("unclosed subexpr")
+		return nil, errors.New("unclosed subexpr")
 	}
 
 	// close the implicit brackets

@@ -2,8 +2,8 @@ package apage
 
 import (
 	"container/list"
-	"http"
 	"io"
+	"net/http"
 	"path"
 	"rand"
 	"strconv"

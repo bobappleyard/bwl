@@ -2,9 +2,7 @@ package lexer
 
 import (
 	"bufio"
-	"container/vector"
 	"io"
-	"os"
 	"strings"
 )
 
@@ -50,7 +48,7 @@ func close(from []State) []State {
 	return res
 }
 
-func move(from []State, c int) []State {
+func move(from []State, c rune) []State {
 	to := []State{}
 	for _, x := range from {
 		ss := x.Move(c)
@@ -86,7 +84,7 @@ const (
 type Lexer struct {
 	root          *BasicState
 	src           *bufio.Reader
-	buf           *vector.IntVector
+	buf           []rune
 	pos, startPos int
 	eof           bool
 }
@@ -103,7 +101,7 @@ func (self *Lexer) Root() *BasicState {
 
 func (self *Lexer) Start(src io.Reader) {
 	self.src = bufio.NewReader(src)
-	self.buf = new(vector.IntVector)
+	self.buf = make([]rune, 0)
 	self.pos = 0
 }
 
@@ -111,19 +109,19 @@ func (self *Lexer) StartString(src string) {
 	self.Start(strings.NewReader(src))
 }
 
-func (self *Lexer) get(pos int) int {
-	for pos >= self.buf.Len() {
+func (self *Lexer) get(pos int) rune {
+	for pos >= len(self.buf) {
 		c, _, err := self.src.ReadRune()
 		if err != nil {
-			if err == os.EOF {
+			if err == io.EOF {
 				self.eof = true
 			}
 			self.src = nil
 			return FAIL
 		}
-		self.buf.Push(c)
+		self.buf = append(self.buf, c)
 	}
-	return self.buf.At(pos)
+	return self.buf[pos]
 }
 
 func (self *Lexer) Next() int {
@@ -176,8 +174,8 @@ func (self *Lexer) Len() int {
 	return self.pos - self.startPos
 }
 
-func (self *Lexer) Data() []int {
-	return []int(*self.buf.Slice(self.startPos, self.pos))
+func (self *Lexer) Data() []rune {
+	return self.buf[self.startPos:self.pos]
 }
 
 func (self *Lexer) String() string {
