@@ -1,12 +1,12 @@
 package apage
 
 import (
-	"http"
 	"container/list"
+	"http"
 	"io"
+	"path"
 	"rand"
 	"strconv"
-	"path"
 
 	"github.com/bobappleyard/bwl/actor"
 )
@@ -14,20 +14,20 @@ import (
 const CACHE_DEFAULT = 1024
 
 type AnonymousPageServer struct {
-	a *actor.Actor
-	limit int
+	a      *actor.Actor
+	limit  int
 	prefix string
-	items *list.List
-	paths map[int64] http.Handler
+	items  *list.List
+	paths  map[int64]http.Handler
 }
 
 func New(prefix string) *AnonymousPageServer {
-	return &AnonymousPageServer {
+	return &AnonymousPageServer{
 		actor.New(),
 		CACHE_DEFAULT,
 		"/" + prefix + "/",
 		list.New(),
-		make(map[int64] http.Handler),
+		make(map[int64]http.Handler),
 	}
 }
 
@@ -84,7 +84,7 @@ func (self *AnonymousPageServer) getPage(id int64) http.Handler {
 }
 
 func (self *AnonymousPageServer) Attach(s *http.ServeMux) {
-	s.Handle(self.prefix, http.HandlerFunc(func (c *http.Conn, r *http.Request) {
+	s.Handle(self.prefix, http.HandlerFunc(func(c *http.Conn, r *http.Request) {
 		_, name := path.Split(r.URL.Path)
 		id, err := strconv.Atoi64(name)
 		if err != nil {

@@ -99,10 +99,10 @@ func (self *eofObj) Id() int {
 // connecting to the lexer library
 type lexPos struct {
 	PosDefaults
-	l *lexer.Lexer
+	l    *lexer.Lexer
 	pass func(int) bool
 	next Position
-	id int
+	id   int
 	data interface{}
 }
 
@@ -124,7 +124,9 @@ func (self *lexPos) Next() Position {
 		if n == lexer.EOF {
 			return EofObject
 		}
-		if self.pass(n) { break }
+		if self.pass(n) {
+			break
+		}
 	}
 	next := new(lexPos)
 	next.l = self.l
@@ -143,4 +145,3 @@ func (self *lexPos) Id() int {
 func (self *lexPos) Data() interface{} {
 	return self.data
 }
-

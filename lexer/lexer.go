@@ -1,11 +1,11 @@
 package lexer
 
 import (
+	"bufio"
+	"container/vector"
 	"io"
 	"os"
-	"container/vector"
 	"strings"
-	"bufio"
 )
 
 /* NFA operations */
@@ -20,7 +20,7 @@ func contains(s State, ss []State) bool {
 }
 
 func union(a []State, b []State) []State {
-	res := make([]State, len(a) + len(b))
+	res := make([]State, len(a)+len(b))
 	l := copy(res, a)
 	for _, x := range b {
 		if !contains(x, res) {
@@ -51,7 +51,7 @@ func close(from []State) []State {
 }
 
 func move(from []State, c int) []State {
-	to := []State {}
+	to := []State{}
 	for _, x := range from {
 		ss := x.Move(c)
 		if len(ss) != 0 {
@@ -84,11 +84,11 @@ const (
 )
 
 type Lexer struct {
-	root *BasicState
-	src *bufio.Reader
-	buf *vector.IntVector
+	root          *BasicState
+	src           *bufio.Reader
+	buf           *vector.IntVector
 	pos, startPos int
-	eof bool
+	eof           bool
 }
 
 func New() *Lexer {
@@ -133,11 +133,11 @@ func (self *Lexer) Next() int {
 	if self.src == nil {
 		return FAIL
 	}
-	fin := []int { FAIL, -1 }
+	fin := []int{FAIL, -1}
 	{
 		pos := self.pos
 		self.startPos = pos
-		this := []State { self.root }
+		this := []State{self.root}
 		for {
 			// follow the empty transitions
 			this = close(this)
@@ -145,11 +145,15 @@ func (self *Lexer) Next() int {
 			finished(this, pos, fin)
 			// try to move
 			c := self.get(pos)
-			if c == FAIL { break }
+			if c == FAIL {
+				break
+			}
 			next := move(this, c)
-			if len(next) == 0 { break }
+			if len(next) == 0 {
+				break
+			}
 			// consume a char
-			pos ++
+			pos++
 			// proceed to the next state set
 			this = next
 		}
@@ -179,5 +183,3 @@ func (self *Lexer) Data() []int {
 func (self *Lexer) String() string {
 	return string(self.Data())
 }
-
-

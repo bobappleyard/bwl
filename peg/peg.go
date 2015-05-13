@@ -10,15 +10,15 @@ import (
 
 /*
 	An expression interface
-	
+
 	Expressions match a position in the source, or not. The Match method
 	should return the position in the input just after the end of the region
-	matched, along with the data corresponding to the region matched. This 
+	matched, along with the data corresponding to the region matched. This
 	could be a string of the text region itself, or it could be an object
 	representing the appropriate part of a syntax tree.
-	
-	A Matcher is a function that looks like an expression object. This 
-	simplifies the creation of new peg forms where being able to treat the 
+
+	A Matcher is a function that looks like an expression object. This
+	simplifies the creation of new peg forms where being able to treat the
 	expression as a slice or struct or what have you isn't desired.
 */
 type Expr interface {
@@ -60,7 +60,7 @@ func (self Terminal) Match(m Position) (Position, interface{}) {
 }
 
 func QualifiedTerminal(t Terminal, s string) Expr {
-	return Matcher(func (m Position) (Position, interface{}) {
+	return Matcher(func(m Position) (Position, interface{}) {
 		p, d := t.Match(m)
 		if !p.Failed() && m.Data().(string) == s {
 			return p, d
@@ -100,11 +100,11 @@ func (self Or) Match(m Position) (Position, interface{}) {
 
 type ExtensibleExpr struct {
 	es *vector.Vector
-	e Or
+	e  Or
 }
 
-func Extensible () *ExtensibleExpr {
-	return &ExtensibleExpr { new(vector.Vector), Or {} }
+func Extensible() *ExtensibleExpr {
+	return &ExtensibleExpr{new(vector.Vector), Or{}}
 }
 
 func (self *ExtensibleExpr) Add(e Expr) {
@@ -114,7 +114,7 @@ func (self *ExtensibleExpr) Add(e Expr) {
 func (self *ExtensibleExpr) Match(m Position) (Position, interface{}) {
 	if len(self.e) != self.es.Len() {
 		newe := make(Or, self.es.Len())
-		for i, e := range *self.es.Slice(0,self.es.Len()) {
+		for i, e := range *self.es.Slice(0, self.es.Len()) {
 			newe[i] = e.(Expr)
 		}
 		self.e = newe
@@ -127,7 +127,7 @@ func (self *ExtensibleExpr) Match(m Position) (Position, interface{}) {
 */
 
 type quantifiedExpr struct {
-	e Expr
+	e        Expr
 	min, max int
 }
 
@@ -148,16 +148,16 @@ func (self *quantifiedExpr) Match(m Position) (Position, interface{}) {
 	for i := self.min; self.max == -1 || i < self.max; i++ {
 		cur, item = self.e.Match(last)
 		if cur.Failed() {
-			return last, []interface{}(*res.Slice(0,res.Len()))
+			return last, []interface{}(*res.Slice(0, res.Len()))
 		}
 		res.Push(item)
 		last = cur
 	}
-	return cur, []interface{}(*res.Slice(0,res.Len()))
+	return cur, []interface{}(*res.Slice(0, res.Len()))
 }
 
 func Quantify(e Expr, min, max int) Expr {
-	return &quantifiedExpr { e, min, max }
+	return &quantifiedExpr{e, min, max}
 }
 
 func Option(e Expr) Expr {
@@ -177,7 +177,7 @@ func Multi(e Expr) Expr {
 */
 
 func Ensure(e Expr) Expr {
-	return Matcher(func (m Position) (Position, interface{}) {
+	return Matcher(func(m Position) (Position, interface{}) {
 		n, _ := e.Match(m)
 		if n.Failed() {
 			return n, nil
@@ -187,7 +187,7 @@ func Ensure(e Expr) Expr {
 }
 
 func Prevent(e Expr) Expr {
-	return Matcher(func (m Position) (Position, interface{}) {
+	return Matcher(func(m Position) (Position, interface{}) {
 		n, _ := e.Match(m)
 		if n.Failed() {
 			return m, nil
@@ -197,8 +197,8 @@ func Prevent(e Expr) Expr {
 }
 
 func RepeatUntil(e, end Expr) Expr {
-	return Select(And { 
-		Repeat(Select(And { Prevent(end), e }, 1)), 
+	return Select(And{
+		Repeat(Select(And{Prevent(end), e}, 1)),
 		end,
 	}, 0)
 }
@@ -208,7 +208,7 @@ func RepeatUntil(e, end Expr) Expr {
 */
 
 func Bind(e Expr, f func(interface{}) interface{}) Expr {
-	return Matcher(func (m Position) (Position, interface{}) {
+	return Matcher(func(m Position) (Position, interface{}) {
 		n, x := e.Match(m)
 		if n.Failed() {
 			return n, nil
@@ -256,4 +256,3 @@ func Select(e Expr, n int) Expr {
 		return v.([]interface{})[n]
 	})
 }
-

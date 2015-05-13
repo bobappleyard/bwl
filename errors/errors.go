@@ -1,8 +1,8 @@
 package errors
 
 import (
-	"os"
 	"fmt"
+	"os"
 )
 
 func Fatal(err os.Error) {

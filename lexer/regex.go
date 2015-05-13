@@ -1,17 +1,17 @@
 package lexer
 
 import (
-	"os"
-	"container/vector"
 	"bytes"
+	"container/vector"
+	"os"
 	"strings"
 
 	"github.com/bobappleyard/bwl/errors"
 )
 
-type RegexSet map[int] string
+type RegexSet map[int]string
 
-var defaultMeta = RegexSet {
+var defaultMeta = RegexSet{
 	'w': "a-zA-Z0-9_",
 	's': " \t\n\r",
 	'a': "a-zA-Z",
@@ -24,7 +24,9 @@ var defaultMeta = RegexSet {
 
 func ExtendSet(base, ext RegexSet) RegexSet {
 	res := make(RegexSet)
-	if base == nil { base = defaultMeta }
+	if base == nil {
+		base = defaultMeta
+	}
 	for k, v := range base {
 		res[k] = v
 	}
@@ -58,7 +60,7 @@ func NewRegex(re string, m RegexSet) *Regex {
 	l := New()
 	l.ForceRegex(re, m).SetFinal(0)
 	l.ForceRegex(".", nil).SetFinal(1)
-	return &Regex { l }
+	return &Regex{l}
 }
 
 func (self *Regex) Match(s string) bool {
@@ -77,7 +79,7 @@ func (self *Regex) Matches(s string) []string {
 			res.Push(self.l.String())
 		}
 	}
-	return []string(*res.Slice(0,res.Len()))
+	return []string(*res.Slice(0, res.Len()))
 }
 
 func (self *Regex) Replace(s string, f func(string) string) string {
@@ -93,7 +95,7 @@ func (self *Regex) Replace(s string, f func(string) string) string {
 		}
 	}
 	res.Push(string(buf[last:]))
-	return strings.Join([]string(*res.Slice(0,res.Len())), "")
+	return strings.Join([]string(*res.Slice(0, res.Len())), "")
 }
 
 func Match(re, s string) bool {
@@ -132,7 +134,7 @@ func (self *BasicState) AddRegex(re string, m RegexSet) (*BasicState, os.Error) 
 
 	// go into a subexpression
 	push := func() {
-		rp := &regexPos { start, end }
+		rp := &regexPos{start, end}
 		stack.Push(rp)
 		end = NewState()
 		start.AddEmptyTransition(end)
@@ -149,10 +151,10 @@ func (self *BasicState) AddRegex(re string, m RegexSet) (*BasicState, os.Error) 
 		start = end
 		end = NewState()
 	}
-	
+
 	// the expression is inside an implicit ( ... )
 	push()
-	
+
 	// parse the expression
 	for _, c := range re {
 		// escaped characters
@@ -197,58 +199,58 @@ func (self *BasicState) AddRegex(re string, m RegexSet) (*BasicState, os.Error) 
 		}
 		// everything else
 		switch c {
-			// charsets
-			case '.':
-				move()
-				start.AddEmptyTransition(Any(end))
-				expr = true
-			case '[':
-				move()
-				cs = true
-			case ']':
-				if !cs {
-					return nil, os.NewError("trying to close unopened charset")
-				}
-			// grouping
-			case '(':
-				move()
-				push()
-				expr = false
-			case ')':
-				if stack.Len() <= 1 {
-					return nil, os.NewError("trying to close unopened subexpr")
-				}
-				pop()
-				expr = true
-			// alternation
-			case '|':
-				pop()
-				push()
-				expr = false
-			// modifiers
-			case '?':
-				start.AddEmptyTransition(end)
-				goto check
-			case '*':
-				start.AddEmptyTransition(end)
-				end.AddEmptyTransition(start)
-				goto check
-			case '+':
-				end.AddEmptyTransition(start)
-				goto check
-			// escape character
-			case '\\':
-				esc = true
-				expr = false
-			// otherwise just add that char
-			default:
-				goto add
+		// charsets
+		case '.':
+			move()
+			start.AddEmptyTransition(Any(end))
+			expr = true
+		case '[':
+			move()
+			cs = true
+		case ']':
+			if !cs {
+				return nil, os.NewError("trying to close unopened charset")
+			}
+		// grouping
+		case '(':
+			move()
+			push()
+			expr = false
+		case ')':
+			if stack.Len() <= 1 {
+				return nil, os.NewError("trying to close unopened subexpr")
+			}
+			pop()
+			expr = true
+		// alternation
+		case '|':
+			pop()
+			push()
+			expr = false
+		// modifiers
+		case '?':
+			start.AddEmptyTransition(end)
+			goto check
+		case '*':
+			start.AddEmptyTransition(end)
+			end.AddEmptyTransition(start)
+			goto check
+		case '+':
+			end.AddEmptyTransition(start)
+			goto check
+		// escape character
+		case '\\':
+			esc = true
+			expr = false
+		// otherwise just add that char
+		default:
+			goto add
 		}
 		continue
 		// make sure the modifier modified something
 	check:
-		if !expr { 
-			return nil, os.NewError("nothing to modify") 
+		if !expr {
+			return nil, os.NewError("nothing to modify")
 		}
 		expr = false
 		continue
@@ -259,16 +261,20 @@ func (self *BasicState) AddRegex(re string, m RegexSet) (*BasicState, os.Error) 
 		expr = true
 		continue
 	}
-	
+
 	// some final consistency checks
-	if cs { return nil, os.NewError("unclosed charset") }
-	if esc { return nil, os.NewError("invalid escape sequence") }
-	if stack.Len() > 1 { return nil, os.NewError("unclosed subexpr") }
-	
+	if cs {
+		return nil, os.NewError("unclosed charset")
+	}
+	if esc {
+		return nil, os.NewError("invalid escape sequence")
+	}
+	if stack.Len() > 1 {
+		return nil, os.NewError("unclosed subexpr")
+	}
+
 	// close the implicit brackets
 	pop()
-	
+
 	return end, nil
 }
-
-
