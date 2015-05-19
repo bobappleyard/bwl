@@ -5,11 +5,12 @@
 package main
 
 import (
-	"os"
-	"./lexer"
-	"./errors"
-	"io/ioutil"
 	"fmt"
+	"io/ioutil"
+	"os"
+
+	"github.com/bobappleyard/bwl/errors"
+	"github.com/bobappleyard/bwl/lexer"
 )
 
 func main() {
@@ -19,5 +20,3 @@ func main() {
 		fmt.Printf("%s\n", x)
 	}
 }
-
-

@@ -1,11 +1,11 @@
 package errors
 
 import (
-	"os"
 	"fmt"
+	"os"
 )
 
-func Fatal(err os.Error) {
+func Fatal(err error) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s", err)
 		panic("panic")

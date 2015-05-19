@@ -5,17 +5,17 @@ They're all licensed under GPLv3 or above. Nyah!
 Compiling etc
 -------------
 
-You'll need [Gobuild](http://code.google.com/p/gobuild/) for this. In the project root, run
+You can go-get for this.
 
-    $ gobuild -lib
+    $ go get github.com/bobappleyard/bwl/apage
 
-This will create all the necessary .a files in the directory you are in. From here, you can check out the example programs.
+From here, you can check out the example programs.
 
     $ cd examples
-    $ gobuild -a
+    $ go build arc.go
+    $ go build lex.go
+    $ go build reg.go
     
-This will work if gobuild accepts the patch I just sent to the maintainer. Fingers crossed. Until then, linking the directories containing all the source files will do it.
-
 You can then go on to try out three demo programs. `lex` creates a lexical analyser where each token type is specified by a regular expression passed in as an argument, and executes this analyser against stdin, printing a report to stdout. `reg` takes a single, regular expression, argument, and then prints all occurences of matches in stdin to stdout. `arc` creates a webserver, listening on port 12345, that has a page, /said, that performs the Arc Challenge. Except it doesn't at the moment, and I don't know why!
 
 actor -- A Simple Serialisation Mechanism
@@ -32,44 +32,48 @@ Example
 
 This uses an actor to manage access to a very simple bank database. Both synchronous and asynchronous uses of the Actor API are presented.
 
-    type Bank struct {
-        a *actor.Actor
-        // no overdraft
-        accounts map[string] uint
-    }
-    
-    func (self *Bank) Deposit(name string, val uint) {
-        go self.a.Schedule(func() interface{} {
-            balance, ok := self.accounts[name]
-            if !ok { balance = 0 }
-            balance += val
-            self.accounts[name] = balance
-            return nil
-        })
-    }
-    
-    func (self *Bank) Withdraw(name string, val uint) uint {
-        return self.a.Schedule(func() interface{} {
-            balance, ok := self.accounts[name]
-            if !ok { balance = 0 }
-            if balance < val { val = balance }
-            balance -= val
-            self.accounts[name] = balance
-            return val
-        }).(int)
-    }   
+```go
+type Bank struct {
+	a *actor.Actor
+	// no overdraft
+	accounts map[string] uint
+}
+
+func (self *Bank) Deposit(name string, val uint) {
+	go self.a.Schedule(func() interface{} {
+		balance, ok := self.accounts[name]
+		if !ok { balance = 0 }
+		balance += val
+		self.accounts[name] = balance
+		return nil
+	})
+}
+
+func (self *Bank) Withdraw(name string, val uint) uint {
+	return self.a.Schedule(func() interface{} {
+		balance, ok := self.accounts[name]
+		if !ok { balance = 0 }
+		if balance < val { val = balance }
+		balance -= val
+		self.accounts[name] = balance
+		return val
+	}).(int)
+}
+```
 
 apage -- Anonymous Pages
 ========================
 
 Go combines lexical scope with first-class functions. Put another way, Go supports "closures."
 
-    func Accum(base int) func(int) int {
-      return func(off int) int {
-        base += off;
-        return base;
-      }
-    }
+```go
+func Accum(base int) func(int) int {
+	return func(off int) int {
+		base += off;
+		return base;
+	}
+}
+```
 
 Go has a library for creating web applications, "http," where functions can be attached to paths on a web server, so as to render web pages. Wouldn't it be nice if we could create a web page that corresponded to an anonymous function?
 
@@ -83,29 +87,31 @@ Continuations can be expressed in a language that lacks them by using something 
 
 An example, the Arc Challenge:
 
-    func Said(c *http.Conn, r *http.Request) {
-      io.WriteString(
-        c,
-        `<form method="post" action="` + 
-        apage.Create(func(d *http.Conn, s *http.Request) {
-          io.WriteString(
-            d, 
-            `<a href="` +
-            apage.Create(func(e *http.Conn, t *http.Request) {
-              io.WriteString(
-                e,
-                `you said: ` + s.FormValue("foo")
-              );
-            }) +
-            `">click here</a>`
-          );
-        }) +
-        `">` +
-        `<input type="text" name="foo"></input>` +
-        `<input type="submit">` +
-        `</form>`
-      );
-    }
+```go
+func Said(c *http.Conn, r *http.Request) {
+	io.WriteString(
+		c,
+		`<form method="post" action="` + 
+		apage.Create(func(d *http.Conn, s *http.Request) {
+			io.WriteString(
+				d, 
+				`<a href="` +
+				apage.Create(func(e *http.Conn, t *http.Request) {
+					io.WriteString(
+						e,
+						`you said: ` + s.FormValue("foo")
+					);
+				}) +
+				`">click here</a>`
+			);
+		}) +
+		`">` +
+		`<input type="text" name="foo"></input>` +
+		`<input type="submit">` +
+		`</form>`
+	);
+}
+```
 
 Obviously not as nice as the Arc version, all that string writing stuff is a bit off, but you get the idea.
 
@@ -138,30 +144,32 @@ While it is possible to manipulate the state graph manually, using the regex par
 
 e.g.
 
-	  const (
-		  IDENT = iota
-		  NUMBER
-		  ...
-	  )
+```go
+const (
+	IDENT = iota
+	NUMBER
+	...
+)
 
-	  ...
+...
 
-		  l := new(lexer.Lexer);
-		  l.ForceRegex(`[a-zA-Z_][0-9a-zA-Z_]*`).SetFinal(IDENT)
-		  l.ForceRegex(`[0-9]+(\.[0-9]+)?`).SetFinal(NUMBER)
-		
-	  ...
-		  l.Start(src)
-		  switch l.Next() {
-		      case IDENT:
-		          return NewIdent(l.String()) // do something with the result
-		      case NUMBER:
-		      ...
-		      
-		      case -1:
-		        // handle failure
-		  }
+	l := new(lexer.Lexer);
+	l.ForceRegex(`[a-zA-Z_][0-9a-zA-Z_]*`).SetFinal(IDENT)
+	l.ForceRegex(`[0-9]+(\.[0-9]+)?`).SetFinal(NUMBER)
+	
+	...
 
+	l.Start(src)
+	switch l.Next() {
+		case IDENT:
+			return NewIdent(l.String()) // do something with the result
+		case NUMBER:
+			...
+	    
+		case -1:
+			// handle failure
+	}
+```
 
 For some more examples of using the interface, see the regex.go file in the library.
 
@@ -180,7 +188,7 @@ a|b     -- matches `a` or `b`
 
 a?      -- matches zero or one occurrences of `a`
 
-a*      -- matches zero or more occurrences of `a`
+a\*      -- matches zero or more occurrences of `a`
 
 a+      -- matches one or more occurrences of `a`
 
@@ -204,23 +212,27 @@ peg -- A Parser Library
 
 PEG parsers are all the rage these days. Go makes writing them particularly easy. There are, principally, two concepts introduced in this library. The first is the Position interface:
 
-    type Position interface {
-    	Next() Position
-    	Fail() Position
-    	Pos() int
-    	Failed() bool
-    	Eof() bool
-    	Id() int
-    	Data() interface{}
-    }
+```go
+type Position interface {
+	Next() Position
+	Fail() Position
+	Pos() int
+	Failed() bool
+	Eof() bool
+	Id() int
+	Data() interface{}
+}
+```
 
 This describes a position in the source. The two main methods are listed first: Next() moves through the source, Fail() aborts the parse. Id() is also important as it identifies the kind of data at that position (e.g. the character code or the token id).
 
 The second is the Expr interface:
 
-    type Expr interface {
-    	Match(m Position) (Position, interface{})
-    }
+```go
+type Expr interface {
+	Match(m Position) (Position, interface{})
+}
+```
 
 This describes a PEG expression. If it succeeds in matching at a particular position, it should return (that position).Next(). If it does not it should call Fail().
 
@@ -276,27 +288,27 @@ Using Terminals
 
 Terminals are the main primitive in the PEG library. The PEG is effectively processing a series of integers. We can return to the lexer example, and by changing the const declaration so that it reads:
 
-      const (
-		  IDENT peg.Terminal = iota
-		  NUMBER
-		  ...
-	  )
+```go
+const (
+	IDENT peg.Terminal = iota
+	NUMBER
+	...
+)
+```
 
 Will allow tokens parsed by the lexer to be used by the PEG.
 
 One could also, assuming the character stream input, create a matcher for a string by doing something like:
 
-    func String(s string) peg.Expr {
-        rs := strings.Runes(s)
-        res := make(peg.And, len(rs))
-        for i, x := range rs {
-            res[i] = peg.Terminal(x)
-        }
-        return res
-    }
+```go
+func String(s string) peg.Expr {
+	rs := strings.Runes(s)
+	res := make(peg.And, len(rs))
+	for i, x := range rs {
+		res[i] = peg.Terminal(x)
+	}
+	return res
+}
+```
 
 This is not included in the library because using the lexer for this sort of thing is preferred. If anyone cares, it could be put in, but unlike all the other expression types listed above, it matters what sort of input the PEG is processing.
-
-
-
-

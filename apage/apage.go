@@ -1,12 +1,13 @@
 package apage
 
 import (
-	"http"
 	"container/list"
+	"fmt"
 	"io"
-	"rand"
-	"strconv"
+	"math/rand"
+	"net/http"
 	"path"
+	"strconv"
 
 	"github.com/bobappleyard/bwl/actor"
 )
@@ -14,20 +15,20 @@ import (
 const CACHE_DEFAULT = 1024
 
 type AnonymousPageServer struct {
-	a *actor.Actor
-	limit int
+	a      *actor.Actor
+	limit  int
 	prefix string
-	items *list.List
-	paths map[int64] http.Handler
+	items  *list.List
+	paths  map[int64]http.Handler
 }
 
 func New(prefix string) *AnonymousPageServer {
-	return &AnonymousPageServer {
+	return &AnonymousPageServer{
 		actor.New(),
 		CACHE_DEFAULT,
 		"/" + prefix + "/",
 		list.New(),
-		make(map[int64] http.Handler),
+		make(map[int64]http.Handler),
 	}
 }
 
@@ -45,7 +46,7 @@ func (self *AnonymousPageServer) Handle(h http.Handler) string {
 		// clear cache
 		for self.items.Len() >= self.limit {
 			e := self.items.Back()
-			self.paths[e.Value.(int64)] = nil, false
+			delete(self.paths, e.Value.(int64))
 			self.items.Remove(e)
 		}
 		// generate a key
@@ -61,12 +62,12 @@ func (self *AnonymousPageServer) Handle(h http.Handler) string {
 		self.items.PushFront(key)
 		self.paths[key] = h
 		// and return the path
-		return self.prefix + strconv.Itoa64(key)
+		return self.prefix + fmt.Sprint(key)
 	}).(string)
 }
 
 // A shortcut for function pages (which should be most of them)
-func (self *AnonymousPageServer) Create(h func(c *http.Conn, r *http.Request)) string {
+func (self *AnonymousPageServer) Create(h func(w http.ResponseWriter, r *http.Request)) string {
 	return self.Handle(http.HandlerFunc(h))
 }
 
@@ -74,9 +75,9 @@ func (self *AnonymousPageServer) getPage(id int64) http.Handler {
 	return self.a.Schedule(func() interface{} {
 		page, ok := self.paths[id]
 		if !ok {
-			return http.HandlerFunc(func(c *http.Conn, r *http.Request) {
-				c.WriteHeader(http.StatusNotFound)
-				io.WriteString(c, "page is not in cache")
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusNotFound)
+				io.WriteString(w, "page is not in cache")
 			})
 		}
 		return page
@@ -84,14 +85,14 @@ func (self *AnonymousPageServer) getPage(id int64) http.Handler {
 }
 
 func (self *AnonymousPageServer) Attach(s *http.ServeMux) {
-	s.Handle(self.prefix, http.HandlerFunc(func (c *http.Conn, r *http.Request) {
+	s.Handle(self.prefix, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, name := path.Split(r.URL.Path)
-		id, err := strconv.Atoi64(name)
+		id, err := strconv.ParseInt(name, 10, 64)
 		if err != nil {
-			c.WriteHeader(http.StatusBadRequest)
-			io.WriteString(c, "invalid page id")
+			w.WriteHeader(http.StatusBadRequest)
+			io.WriteString(w, "invalid page id")
 		} else {
-			self.getPage(id).ServeHTTP(c, r)
+			self.getPage(id).ServeHTTP(w, r)
 		}
 	}))
 }
@@ -110,6 +111,6 @@ func Handle(h http.Handler) string {
 	return server.Handle(h)
 }
 
-func Create(h func(c *http.Conn, r *http.Request)) string {
+func Create(h func(w http.ResponseWriter, r *http.Request)) string {
 	return server.Create(h)
 }
